@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=78"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "evals"
+version = "1.0.0"
+description = "This is ZeroEntropy's repository of evals and benchmarks"
+readme = "README.md"
+requires-python = "==3.12.*"
+authors = [{ name = "Nicholas Pipitone", email = "pipitone@zeroentropy.dev" }]
+classifiers = []
+dependencies = [
+    "setuptools==78.1.0",
+    "python-dotenv==1.0.1",
+    "datasets==3.5.0",
+    "faiss-cpu==1.10.0",
+    "jupyter==1.1.1",
+    "typed_argparse==0.3.1",
+    "mteb[openai]==1.38.27",
+    "loguru==0.7.3",
+    "openai==1.71.0",
+    "anthropic==0.49.0",
+    "zeroentropy==0.1.0a5",
+    "cohere==5.14.2",
+    "voyageai==0.3.2",
+    "mxbai-rerank==0.1.3",
+    "openlimit @ git+https://github.com/shobrook/openlimit.git@ae77eb7d41f537ce1e68f78031f4b7197ddf29f4",
+    "matplotlib==3.10.1",
+    "httpx[http2]==0.27.2",
+    "pydantic==2.11.3",
+    "diskcache==5.6.3",
+    # Development
+    "basedpyright==1.28.4",
+    "ruff==0.11.4",
+    "pytest==8.3.5",
+    "pytest-asyncio==0.26.0",
+    "pandas-stubs==2.2.3.250308",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["evals"]
+
+[tool.pytest.ini_options]
+asyncio_default_fixture_loop_scope = "function"
+testpaths = "tests"
+addopts = "-vv -x"
+asyncio_mode = "auto"
+pythonpath = ["."]

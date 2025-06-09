@@ -1,0 +1,59 @@
+include = [
+    "pyproject.toml",
+    "evals/**/*.py",
+]
+
+target-version = "py312"
+unsafe-fixes = false
+
+[lint]
+select = [
+    # pycodestyle
+    "E",
+    # Pyflakes
+    "F",
+    # pyupgrade
+    "UP",
+    # flake8-annotations
+    "ANN",
+    # flake8-comprehensions
+    "C",
+    # flake8-bugbear
+    "B",
+    # flake8-simplify
+    "SIM",
+    # flake8-commas
+    "COM",
+    # Sort imports
+    "I",
+]
+ignore = [
+    # CAREFUL: This is dangerous, but also annoying to suppress. Learn about this.
+    "B023",
+    # Explicit Any is allowed
+    "ANN401",
+    # Line too long
+    "E501",
+    # Trailing Commas
+    "COM812",
+    # Function too complex
+    "C901",
+    # dict() instead of {} is sometimes useful
+    "C408",
+    # {} instead of dict() is sometimes more readable
+    "C416",
+    # set(iterator) is easier to read than set comprehension
+    "C401",
+    # try, except, pass is easier to understand than contextlib.suppress
+    "SIM105",
+    # if-else is sometimes better than ternary
+    "SIM108",
+    # explicit .keys() is better than implicit
+    "SIM118",
+    # assert False
+    "B011",
+]
+unfixable = [
+    # This should be fixed with strict=True, not strict=False
+    "B905",
+]

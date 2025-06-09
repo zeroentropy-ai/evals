@@ -1,0 +1,18 @@
+[AILAStatutes](https://zenodo.org/records/4063986),Retrieval,eng,"Legal, Written",ndcg_at_10,text
+[ArguAna](http://argumentation.bplaced.net/arguana/data),Retrieval,eng,"Medical, Written",ndcg_at_10,text
+[BelebeleRetrieval](https://arxiv.org/abs/2308.16884),Retrieval,"acm, afr, als...","Web, News, Written",ndcg_at_10,text
+[CovidRetrieval](https://arxiv.org/abs/2203.03367),Retrieval,cmn,"Medical, Entertainment",ndcg_at_10,text
+[HagridRetrieval](https://github.com/project-miracl/hagrid),Retrieval,eng,"Encyclopaedic, Written",ndcg_at_10,text
+[LEMBPasskeyRetrieval](https://huggingface.co/datasets/dwzhu/LongEmbed),Retrieval,eng,"Fiction, Written",ndcg_at_1,text
+[LegalBenchCorporateLobbying](https://huggingface.co/datasets/nguha/legalbench/viewer/corporate_lobbying),Retrieval,eng,"Legal, Written",ndcg_at_10,text
+[MIRACLRetrievalHardNegatives](http://miracl.ai/),Retrieval,"ara, ben, deu...","Encyclopaedic, Written",ndcg_at_10,text
+[MLQARetrieval](https://huggingface.co/datasets/mlqa),Retrieval,"ara, deu, eng...","Encyclopaedic, Written",ndcg_at_10,text
+[SCIDOCS](https://allenai.org/data/scidocs),Retrieval,eng,"Academic, Written, Non-fiction",ndcg_at_10,text
+[SpartQA](https://github.com/HLR/SpartQA_generation),Retrieval,eng,"Encyclopaedic, Written",ndcg_at_10,text
+[StackOverflowQA](https://arxiv.org/abs/2407.02883),Retrieval,eng,"Programming, Written",ndcg_at_10,text
+[StatcanDialogueDatasetRetrieval](https://mcgill-nlp.github.io/statcan-dialogue-dataset/),Retrieval,"eng, fra","Government, Web, Written",recall_at_10,text
+[TRECCOVID](https://ir.nist.gov/covidSubmit/index.html),Retrieval,eng,"Medical, Academic, Written",ndcg_at_10,text
+[TempReasonL1](https://github.com/DAMO-NLP-SG/TempReason),Retrieval,eng,"Encyclopaedic, Written",ndcg_at_10,text
+[TwitterHjerneRetrieval](https://huggingface.co/datasets/sorenmulli/da-hashtag-twitterhjerne),Retrieval,dan,"Social, Written",ndcg_at_10,text
+[WikipediaRetrievalMultilingual](https://huggingface.co/datasets/ellamind/wikipedia-2023-11-retrieval-multilingual-queries),Retrieval,"ben, bul, ces...","Encyclopaedic, Written",ndcg_at_10,text
+[WinoGrande](https://winogrande.allenai.org/),Retrieval,eng,"Encyclopaedic, Written",ndcg_at_10,text
