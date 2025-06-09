@@ -36,6 +36,9 @@ from openlimit.redis_rate_limiters import (  # pyright: ignore[reportMissingType
 )
 from pydantic import BaseModel, ValidationError, computed_field
 from sentence_transformers import CrossEncoder, SentenceTransformer
+from dotenv import load_dotenv
+
+load_dotenv()
 
 REDIS_URL = None
 AI_CACHE_DIR = "./.cache"
