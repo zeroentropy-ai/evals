@@ -12,10 +12,11 @@ def analyze_ndcg(company, model_name, dataset_name):
                 relevance_scores = np.array(result["relevance_scores"])
 
                 # Compute DCG for the reranked order
-                if model_name == "zeroentropy": #a peculiarity
-                    reranked_order = np.argsort(reranked_scores)
-                else:
-                    reranked_order = np.argsort(reranked_scores)[::-1]
+                reranked_order = np.argsort(reranked_scores)[::-1]
+                #if model_name == "zeroentropy": #a peculiarity
+                #    reranked_order = np.argsort(reranked_scores)
+                #else:
+                #    reranked_order = np.argsort(reranked_scores)[::-1]
                 dcg = sum(
                     relevance_scores[idx] / np.log2(rank + 2)
                     for rank, idx in enumerate(reranked_order)
@@ -39,6 +40,7 @@ def analyze_ndcg(company, model_name, dataset_name):
         print("Error:", e)
 
 if __name__ == "__main__":
-    analyze_ndcg("cohere", "rerank-v3.5", "mteb/LegalQuAD")
-    analyze_ndcg("together", "Llama-Rank-V1", "mteb/LegalQuAD")
-    analyze_ndcg("zeroentropy", "zeroentropy", "mteb/LegalQuAD")
+    dataset_name = "clinia/CUREv1"
+    analyze_ndcg("cohere", "rerank-v3.5", dataset_name)
+    analyze_ndcg("together", "Llama-Rank-V1", dataset_name)
+    analyze_ndcg("zeroentropy", "zeroentropy", dataset_name)
