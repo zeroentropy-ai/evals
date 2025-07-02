@@ -38,7 +38,17 @@ from pydantic import BaseModel, ValidationError, computed_field
 from sentence_transformers import CrossEncoder, SentenceTransformer
 from dotenv import load_dotenv
 
+import aiohttp
+
+from evals.utils import get_client
+
 load_dotenv()
+
+
+
+MODAL_MAX_SIMULTANEOUS_REQUESTS = 250
+MODAL_SEMAPHORE = asyncio.Semaphore(MODAL_MAX_SIMULTANEOUS_REQUESTS)
+DRY_RUN = False
 
 REDIS_URL = None
 AI_CACHE_DIR = "./.cache"
@@ -1163,3 +1173,60 @@ async def ai_rerank(
 
     assert all(score is not None for score in text_scores)
     return cast(list[float], text_scores)
+
+def tiktoken_truncate_by_num_tokens(
+    s: str,
+    max_tokens: int,
+    *,
+    model: str = "cl100k_base",
+) -> str:
+    encoding = tiktoken.get_encoding(model)
+    tokens = encoding.encode(s)
+    tokens = tokens[:max_tokens]
+    return encoding.decode(tokens)
+
+async def modal_pointwise_score(
+    query_documents: list[tuple[str, str]],
+    *,
+    url: str | None = None,
+    timeout: float | None = None,
+    num_retries: int = 7,
+) -> list[float]:
+    if url is None:
+        url = "https://npip99--ze-rerank-v0-3-0-model-endpoint.modal.run/"
+
+    scores = None
+    for _retry in range(num_retries):
+        try:
+            if DRY_RUN:
+                await asyncio.sleep(0.3 + random.random() * 0.1)
+                scores = [random.random() for _ in query_documents]
+            else:
+                async with (
+                    MODAL_SEMAPHORE,
+                    get_client().post(
+                        url,
+                        headers={
+                            "Modal-Key": os.environ["MODAL_KEY"],
+                            "Modal-Secret": os.environ["MODAL_SECRET"],
+                        },
+                        json={
+                            "query_documents": query_documents,
+                        },
+                        timeout=aiohttp.ClientTimeout(total=timeout)
+                        if timeout is not None
+                        else None,
+                    ) as response,
+                ):
+                    result = await response.json()
+                scores = [float(score) for score in result["scores"]]
+                assert len(scores) == len(query_documents)
+                break  # Exit Loop
+        except (aiohttp.ClientError, TimeoutError) as e:
+            delay = 0.25 * (2**_retry)
+            print(f"Request timed out: {e}. Retrying in {delay}s...")
+            await asyncio.sleep(delay)
+    if scores is None:
+        raise TimeoutError("Could not recover from API errors")
+
+    return scores
