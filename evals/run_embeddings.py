@@ -24,7 +24,7 @@ USE_EMBEDDINGS_CACHE = True
 EMBEDDING_MAX_TOKENS = 8192
 
 # Configuration: Change this constant to select retrieval method
-RETRIEVAL_METHOD: Literal["openai_small", "bm25", "hybrid"] = "openai_small"
+RETRIEVAL_METHOD: Literal["openai_small", "bm25", "hybrid"] = "bm25"
 INCLUDE_RELEVANT_DOCS = False
 MERGE_STATUS = "merged_" if INCLUDE_RELEVANT_DOCS else ""
 SAVE_NAME = f"{RETRIEVAL_METHOD}_{MERGE_STATUS}ze_results.jsonl"

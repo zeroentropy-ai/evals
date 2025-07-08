@@ -119,6 +119,7 @@ class MasterMtebIngestor(BaseIngestor):
     dataset_name: str
     language: str | None
     split: str
+    instructions: str | None
 
     def __init__(
         self,
@@ -127,11 +128,13 @@ class MasterMtebIngestor(BaseIngestor):
         dataset_name: str,
         language: str | None = None,
         split: str = "test",
+        instructions: str | None = None,
     ) -> None:
         self.task_name = task_name
         self.dataset_name = dataset_name
         self.language = language
         self.split = split
+        self.instructions = instructions
 
     @override
     def dataset_id(self) -> str:
@@ -143,6 +146,12 @@ class MasterMtebIngestor(BaseIngestor):
         # Load MTEB task and data
         task: Any = mteb.get_task(self.task_name)
         task.load_data()
+
+        def extract_instructions_query_content(query_data: str | dict[Any, Any] | Any) -> str:
+            if self.instructions is not None:
+                return f"{self.instructions}\n\n{extract_query_content(query_data)}"
+            else:
+                return extract_query_content(query_data)
 
         # If language is multilingual, combine all splits
         if self.language == "multilingual":
@@ -246,7 +255,7 @@ class MasterMtebIngestor(BaseIngestor):
             queries.append(
                 Query(
                     id=query_id,
-                    query=extract_query_content(query_data),
+                    query=extract_instructions_query_content(query_data),
                     metadata={"dataset": self.dataset_name, "language": self.language},
                 )
             )
@@ -347,7 +356,7 @@ class MasterMtebIngestor(BaseIngestor):
                                 all_queries.append(
                                     Query(
                                         id=query_id,
-                                        query=extract_query_content(query_data),
+                                        query=extract_instructions_query_content(query_data),
                                         metadata={
                                             "dataset": self.dataset_name,
                                             "language": "multilingual",
@@ -363,7 +372,7 @@ class MasterMtebIngestor(BaseIngestor):
                             all_queries.append(
                                 Query(
                                     id=query_id,
-                                    query=extract_query_content(query_data),
+                                    query=extract_instructions_query_content(query_data),
                                     metadata={
                                         "dataset": self.dataset_name,
                                         "language": "multilingual",
@@ -511,7 +520,7 @@ class MasterMtebIngestor(BaseIngestor):
             queries.append(
                 Query(
                     id=query_id,
-                    query=extract_query_content(query_data),
+                    query=extract_instructions_query_content(query_data),
                     metadata={"dataset": self.dataset_name, "language": self.language},
                 )
             )
