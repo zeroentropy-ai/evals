@@ -53,8 +53,8 @@ async def get_openai_small_embeddings(
                 for query in queries
             ],
             embedding_type=AIEmbeddingType.QUERY,
-            callback=lambda: pbar.update(1),
             cache=embeddings_cache,
+            callback=lambda: pbar.update(1),
         )
     )
     pbar.close()
@@ -62,12 +62,6 @@ async def get_openai_small_embeddings(
         tiktoken_truncate_by_num_tokens(document.content, EMBEDDING_MAX_TOKENS)
         for document in tqdm(documents, desc="Truncating Documents")
     ]
-    pbar = tqdm(
-        desc="Document Embeddings",
-        total=len(documents),
-    )
-
-    pbar.close()
 
     # Calculate dot products
     DOT_PRODUCT_BATCH_SIZE = 32000
@@ -78,10 +72,11 @@ async def get_openai_small_embeddings(
     dot_products = np.empty((num_queries, num_docs), dtype=np.float32)
 
     pbar = tqdm(
-        desc="Dot Products",
+        desc="Document Embeddings",
         total=len(documents),
     )
     for j in range(0, num_docs, DOT_PRODUCT_BATCH_SIZE):
+        pbar.set_postfix_str("Running Embeddings")
         end = min(j + DOT_PRODUCT_BATCH_SIZE, num_docs)
         # Compute dot product for all queries against a batch of documents
         document_embeddings = np.array(
@@ -90,10 +85,12 @@ async def get_openai_small_embeddings(
                 texts=document_texts[j:end],
                 embedding_type=AIEmbeddingType.DOCUMENT,
                 cache=embeddings_cache,
+                callback=lambda: pbar.update(1),
             )
         )
+        pbar.set_postfix_str("Calculating Dot Product")
         dot_products[:, j:end] = query_embeddings @ document_embeddings.T
-        pbar.update(end - j)
+    pbar.set_postfix_str()
     pbar.close()
 
     # Get top k documents for each query
