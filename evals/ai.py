@@ -1275,6 +1275,7 @@ async def ai_rerank(
                             json={
                                 "query_documents": query_documents,
                             },
+                            timeout=5*60,
                         )
                         result = response.json()
                         relevance_scores = [float(score) for score in result["scores"]]
@@ -1286,8 +1287,8 @@ async def ai_rerank(
                     httpx.RemoteProtocolError,
                     httpx.ReadTimeout,
                     httpx.ConnectTimeout,
-                ):
-                    logger.warning("Modal RateLimitError")
+                ) as e:
+                    logger.exception("Modal RateLimitError")
                     await asyncio.sleep(1)
             if relevance_scores is None:
                 raise AITimeoutError("Cannot overcome Modal RateLimitError")

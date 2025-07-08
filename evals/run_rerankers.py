@@ -16,7 +16,6 @@ from evals.utils import read_num_lines_pbar
 DATASETS = EVAL_DATASETS
 NUM_SIMULTANEOUS_LINES = 25
 NUM_SIMULTANEOUS_RERANKS = 150
-VOYAGE_RERANKER = AIRerankModel(company="voyageai", model="rerank-2")
 RERANKERS: dict[str, AIRerankModel] = {
     # "cohere": AIRerankModel(company="cohere", model="rerank-v3.5"),
     # "salesforce": AIRerankModel(company="together", model="Salesforce/Llama-Rank-V1"),
