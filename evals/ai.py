@@ -6,7 +6,8 @@ import os
 import time
 from collections.abc import Callable, Coroutine
 from enum import Enum
-from typing import Any, Literal, cast
+from pathlib import Path
+from typing import Any, Literal, TextIO, cast
 from uuid import uuid4
 
 import anthropic
@@ -24,6 +25,7 @@ import voyageai.client_async
 import voyageai.error
 from anthropic import NOT_GIVEN, Anthropic, AsyncAnthropic, NotGiven
 from anthropic.types import MessageParam
+from dotenv import load_dotenv
 from loguru import logger
 from mxbai_rerank import MxbaiRerankV2  # pyright: ignore[reportMissingTypeStubs]
 from openai import AsyncOpenAI
@@ -36,24 +38,18 @@ from openlimit.redis_rate_limiters import (  # pyright: ignore[reportMissingType
 )
 from pydantic import BaseModel, ValidationError, computed_field
 from sentence_transformers import CrossEncoder, SentenceTransformer
-from dotenv import load_dotenv
 
-import aiohttp
+from evals.utils import ROOT
 
-from evals.utils import get_client
-
-load_dotenv()
-
-
-
-MODAL_MAX_SIMULTANEOUS_REQUESTS = 250
-MODAL_SEMAPHORE = asyncio.Semaphore(MODAL_MAX_SIMULTANEOUS_REQUESTS)
-DRY_RUN = False
+load_dotenv(override=True)
 
 REDIS_URL = None
-AI_CACHE_DIR = "./.cache"
+AI_CACHE_DIR = f"{ROOT}/.cache"
 AI_CACHE_SIZE_LIMIT = None
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+DEBUG = False
+
+USING_VERTEX_AI = bool(os.environ.get("USING_VERTEX_AI"))
 
 AIEmbedding = np.ndarray[Literal[1], np.dtype[np.float32]]
 
@@ -80,8 +76,11 @@ class AIModel(BaseModel):
                     case _:
                         return 1_000_000
             case "google":
-                # Tier 2
-                return 5_000_000
+                if USING_VERTEX_AI:
+                    return 50_000_000
+                else:
+                    # Tier 2
+                    return 5_000_000
             case "anthropic":
                 # Tier 4
                 return 80_000
@@ -98,8 +97,11 @@ class AIModel(BaseModel):
                     case _:
                         return 10_000
             case "google":
-                # Tier 2
-                return 1_000
+                if USING_VERTEX_AI:
+                    return 10_000
+                else:
+                    # Tier 2
+                    return 1_000
             case "anthropic":
                 # Tier 4
                 return 4_000
@@ -226,7 +228,7 @@ class AIRerankModel(BaseModel):
         match self.company:
             case "voyageai":
                 return 2_000_000
-            case "cohere" | "jina" | "together" | "huggingface":
+            case "cohere" | "jina" | "together" | "huggingface" | "modal":
                 return float("inf")
 
     @computed_field
@@ -244,15 +246,17 @@ class AIRerankModel(BaseModel):
                 return 1000
             case "huggingface":
                 return 1000
+            case "modal":
+                return 1000
 
 
 # Cache (Default=1GB, LRU)
 os.makedirs(AI_CACHE_DIR, exist_ok=True)
-cache: dc.Cache | None
+g_cache: dc.Cache | None
 if AI_CACHE_SIZE_LIMIT is None:
-    cache = None
+    g_cache = None
 else:
-    cache = dc.Cache(f"{AI_CACHE_DIR}/ai_cache.db", size_limit=AI_CACHE_SIZE_LIMIT)
+    g_cache = dc.Cache(f"{AI_CACHE_DIR}/ai_cache.db", size_limit=AI_CACHE_SIZE_LIMIT)
 
 RATE_LIMIT_RATIO = 0.95
 
@@ -270,6 +274,8 @@ class AIConnection:
     huggingface_client: tuple[
         dict[str, SentenceTransformer], dict[str, CrossEncoder | MxbaiRerankV2]
     ]
+    modal_client: httpx.AsyncClient
+    modal_semaphore: asyncio.Semaphore
     # Mapping from (company, model) to RateLimiter
     rate_limiters: dict[str, RateLimiter | RateLimiterWithRedis]
     backoff_semaphores: dict[str, asyncio.Semaphore]
@@ -278,8 +284,10 @@ class AIConnection:
     def __init__(self) -> None:
         self.openai_client = AsyncOpenAI()
         self.google_client = AsyncOpenAI(
-            base_url="https://generativelanguage.googleapis.com/v1beta/",
-            api_key=os.getenv("GEMINI_API_KEY"),
+            base_url="https://aiplatform.googleapis.com/v1/projects/zeroentropy-435019/locations/global/endpoints/openapi"
+            if USING_VERTEX_AI
+            else "https://generativelanguage.googleapis.com/v1beta/",
+            api_key=os.environ.get("GEMINI_API_KEY"),
         )
         self.anthropic_client = AsyncAnthropic()
         self.sync_anthropic_client = Anthropic()
@@ -303,6 +311,8 @@ class AIConnection:
         except cohere.core.api_error.ApiError:
             self.together_rerank_client = None
         self.jina_client = httpx.AsyncClient(http2=True)
+        self.modal_client = httpx.AsyncClient(http2=True)
+        self.modal_semaphore = asyncio.Semaphore(250)
         self.huggingface_client = ({}, {})
 
         self.rate_limiters = {}
@@ -383,6 +393,18 @@ class AIRuntimeError(AIError, RuntimeError):
     """A class for AI Task Timeout Errors"""
 
 
+def tiktoken_truncate_by_num_tokens(
+    s: str,
+    max_tokens: int,
+    *,
+    model: str = "cl100k_base",
+) -> str:
+    encoding = tiktoken.get_encoding(model)
+    tokens = encoding.encode(s)
+    tokens = tokens[:max_tokens]
+    return encoding.decode(tokens)
+
+
 def ai_num_tokens(model: AIModel | AIEmbeddingModel | AIRerankModel, s: str) -> int:
     if isinstance(model, AIModel):
         if model.company == "anthropic":
@@ -440,6 +462,17 @@ def get_call_cache_key(
     return key
 
 
+usage_files: dict[str, TextIO] = {}
+
+
+def get_usage_file(filename: str) -> TextIO:
+    if filename not in usage_files:
+        path = Path(f"{ROOT}/logs/usage/{filename}.csv")
+        os.makedirs(path.parent, exist_ok=True)
+        usage_files[filename] = open(path, "a")  # noqa: SIM115
+    return usage_files[filename]
+
+
 async def ai_call[T: str | BaseModel](
     model: AIModel,
     messages: list[AIMessage],
@@ -458,9 +491,11 @@ async def ai_call[T: str | BaseModel](
     backoff_algo: Callable[[int], float] = lambda i: min(2**i, 5),
     # The output type for the ai_call. Valid options are a pydantic BaseModel or a str. Using a BaseModel will use the Structured Output API.
     response_format: type[T] = str,
+    # Usage Filename. If provided, will store usage statistics in ./logs/usage/{usage_filename}.csv
+    usage_filename: str | None = None,
 ) -> T:
     cache_key = get_call_cache_key(model, messages)
-    cached_call = cast(Any, cache.get(cache_key)) if cache is not None else None  # pyright: ignore[reportUnknownMemberType]
+    cached_call = cast(Any, g_cache.get(cache_key)) if g_cache is not None else None  # pyright: ignore[reportUnknownMemberType]
 
     if cached_call is not None:
         assert isinstance(cached_call, response_format)
@@ -490,22 +525,37 @@ async def ai_call[T: str | BaseModel](
                             return {"role": message.role, "content": message.content}
                         raise NotImplementedError("Unreachable Code")
 
-                    if i > 0:
+                    if i > 0 and DEBUG:
                         logger.debug("Trying again after RateLimitError...")
                     match model.company:
                         case "openai":
                             client = get_ai_connection().openai_client
+                            model_str = model.model
+                            extra_body = None
                         case "google":
                             client = get_ai_connection().google_client
+                            extra_body = {
+                                "extra_body": {
+                                    "google": {
+                                        "thinking_config": {
+                                            "thinking_budget": 0,
+                                        }
+                                    }
+                                }
+                            }
+                            model_str = model.model
+                            if USING_VERTEX_AI:
+                                model_str = f"google/{model_str}"
                     if response_format is str:
                         response = await client.chat.completions.create(
-                            model=model.model,
+                            model=model_str,
                             messages=[
                                 ai_message_to_openai_message_param(message)
                                 for message in messages
                             ],
                             temperature=temperature,
                             max_tokens=max_tokens,
+                            extra_body=extra_body,
                         )
                         response_content = response.choices[0].message.content
                         assert response_content is not None
@@ -513,21 +563,37 @@ async def ai_call[T: str | BaseModel](
                         return_value = response_content
                     else:
                         response = await client.beta.chat.completions.parse(
-                            model=model.model,
+                            model=model_str,
                             messages=[
                                 ai_message_to_openai_message_param(message)
                                 for message in messages
                             ],
                             temperature=0,
+                            max_tokens=max_tokens,
                             response_format=response_format,
+                            extra_body=extra_body,
                         )
+                        assert response.usage is not None
+                        reasoning_tokens = (
+                            response.usage.completion_tokens_details.reasoning_tokens
+                            if response.usage.completion_tokens_details is not None
+                            else None
+                        )
+                        if usage_filename is not None:
+                            f = get_usage_file(usage_filename)
+                            f.write(
+                                f"{response.usage.prompt_tokens},{response.usage.completion_tokens},{reasoning_tokens}\n"
+                            )
+                            f.flush()
                         response_parsed = response.choices[0].message.parsed
                         assert response_parsed is not None
                         assert isinstance(response_parsed, response_format)
                         return_value = response_parsed
                     break
-                except openai.RateLimitError:
-                    logger.warning("OpenAI RateLimitError")
+                except openai.LengthFinishReasonError as e:
+                    raise AIRuntimeError("LengthFinishReasonError") from e
+                except openai.RateLimitError as e:
+                    logger.warning(f"OpenAI RateLimitError: {e}")
             if return_value is None:
                 raise AITimeoutError("Cannot overcome OpenAI RateLimitError")
 
@@ -549,7 +615,7 @@ async def ai_call[T: str | BaseModel](
                             )
                         raise NotImplementedError("Unreachable Code")
 
-                    if i > 0:
+                    if i > 0 and DEBUG:
                         logger.debug("Trying again after RateLimitError...")
 
                     # Extract system message if it exists
@@ -644,8 +710,8 @@ async def ai_call[T: str | BaseModel](
             if return_value is None:
                 raise AITimeoutError("Cannot overcome Anthropic RateLimitError")
 
-    if cache is not None:
-        cache.set(cache_key, return_value)  # pyright: ignore[reportUnknownMemberType]
+    if g_cache is not None:
+        g_cache.set(cache_key, return_value)  # pyright: ignore[reportUnknownMemberType]
     return return_value
 
 
@@ -670,12 +736,16 @@ async def ai_embedding(
     # Backoff function (Receives index of attempt)
     backoff_algo: Callable[[int], float] = lambda i: min(2**i, 5),
     # Callback (For tracking progress)
-    callback: Callable[[], None] = lambda: None,
+    callback: Callable[[], Any] = lambda: None,
+    # Cache
+    cache: dc.Cache | None = None,
+    # Num Tokens (Internal: To prevent recalculating)
+    _texts_num_tokens: list[int] | None = None,
 ) -> list[AIEmbedding]:
-    # Truncate Input
-    encoding = tiktoken.encoding_for_model(model.model)
-    for i, text in enumerate(texts):
-        texts[i] = encoding.decode(encoding.encode(text)[:8192])
+    if cache is None:
+        cache = g_cache
+    if _texts_num_tokens is None:
+        _texts_num_tokens = [ai_num_tokens(model, text) for text in texts]
 
     # Extract cache miss indices
     text_embeddings: list[AIEmbedding | None] = [None] * len(texts)
@@ -686,14 +756,15 @@ async def ai_embedding(
                 cache_key = get_embeddings_cache_key(model, text, embedding_type)
                 cache_result = cast(Any, cache.get(cache_key))  # pyright: ignore[reportUnknownMemberType]
                 if cache_result is not None:
-                    callback()
                     if not isinstance(cache_result, np.ndarray):
                         logger.warning("Invalid cache_result, ignoring...")
                         continue
+                    callback()
                     cache_result = cast(AIEmbedding, cache_result)
                     text_embeddings[i] = cache_result
         end_time = time.time()
-        logger.debug(f"Cache Read Time: {(end_time - start_time) * 1000:.2f}ms")
+        if DEBUG:
+            logger.debug(f"Cache Read Time: {(end_time - start_time) * 1000:.2f}ms")
     if not any(embedding is None for embedding in text_embeddings):
         return cast(list[AIEmbedding], text_embeddings)
     required_text_embeddings_indices = [
@@ -701,10 +772,7 @@ async def ai_embedding(
     ]
 
     num_tokens_input: int = sum(
-        [
-            ai_num_tokens(model, texts[index])
-            for index in required_text_embeddings_indices
-        ]
+        [_texts_num_tokens[index] for index in required_text_embeddings_indices]
     )
 
     # Recursively Batch if necessary
@@ -733,6 +801,8 @@ async def ai_embedding(
                     num_ratelimit_retries=num_ratelimit_retries,
                     backoff_algo=backoff_algo,
                     callback=callback,
+                    cache=cache,
+                    _texts_num_tokens=[_texts_num_tokens[i] for i in batch_indices],
                 )
             )
         preflattened_results = await asyncio.gather(*tasks)
@@ -753,15 +823,19 @@ async def ai_embedding(
             for i in range(num_ratelimit_retries):
                 try:
                     call_id = uuid4()
-                    logger.debug(f"Start AIEmbedding Call {call_id}")
+                    if DEBUG:
+                        logger.debug(
+                            f"Start AIEmbedding Call {call_id} (N_TOKENS={num_tokens_input})"
+                        )
                     start_time = time.time()
                     await get_ai_connection().ai_wait_ratelimit(
                         model, num_tokens_input, backoff_algo(i - 1) if i > 0 else None
                     )
                     end_time = time.time()
-                    logger.debug(
-                        f"AIEmbedding RateLimit Wait Time {call_id}: {(end_time - start_time) * 1000:.2f}ms (N_TOKENS={num_tokens_input})"
-                    )
+                    if DEBUG:
+                        logger.debug(
+                            f"AIEmbedding RateLimit Wait Time {call_id}: {(end_time - start_time) * 1000:.2f}ms (N_TOKENS={num_tokens_input})"
+                        )
                     prepared_input_texts = [text for text in input_texts]
                     for i, text in enumerate(prepared_input_texts):
                         if len(text) == 0:
@@ -783,9 +857,10 @@ async def ai_embedding(
                         encoding_format="base64" if using_base64 else "float",
                     )
                     end_time = time.time()
-                    logger.debug(
-                        f"AIEmbedding Call {call_id}: {(end_time - start_time) * 1000:.2f}ms (N_TOKENS={num_tokens_input})"
-                    )
+                    if DEBUG:
+                        logger.debug(
+                            f"AIEmbedding Call {call_id}: {(end_time - start_time) * 1000:.2f}ms (N_TOKENS={num_tokens_input})"
+                        )
                     response_embeddings: list[AIEmbedding] = []
                     for embedding_obj in response.data:
                         if using_base64:
@@ -802,16 +877,20 @@ async def ai_embedding(
                                 np.array(embedding_obj.embedding)
                             )
                     t2 = time.time()
-                    logger.debug(
-                        f"AIEmbedding Decoding Time {call_id}: {(t2 - end_time) * 1000:.2f}ms"
-                    )
+                    if DEBUG:
+                        logger.debug(
+                            f"AIEmbedding Decoding Time {call_id}: {(t2 - end_time) * 1000:.2f}ms"
+                        )
                     text_embeddings_response = response_embeddings
                     break
+                except openai.BadRequestError:
+                    raise
                 except (
                     openai.RateLimitError,
                     openai.APITimeoutError,
                 ):
-                    logger.warning("AIEmbedding RateLimitError")
+                    if DEBUG:
+                        logger.warning("AIEmbedding RateLimitError")
                 except openai.APIError as e:
                     logger.exception(f"AIEmbedding Unknown Error: {repr(e)}")
             if text_embeddings_response is None:
@@ -883,15 +962,19 @@ async def ai_embedding(
             for i in range(num_ratelimit_retries):
                 try:
                     call_id = uuid4()
-                    logger.debug(f"Start AIEmbedding Call {call_id} (task={task_id})")
+                    if DEBUG:
+                        logger.debug(
+                            f"Start AIEmbedding Call {call_id} (task={task_id})"
+                        )
                     start_time = time.time()
                     await get_ai_connection().ai_wait_ratelimit(
                         model, num_tokens_input, backoff_algo(i - 1) if i > 0 else None
                     )
                     end_time = time.time()
-                    logger.debug(
-                        f"AIEmbedding RateLimit Wait Time {call_id}: {(end_time - start_time) * 1000:.2f}ms (N_TOKENS={num_tokens_input})"
-                    )
+                    if DEBUG:
+                        logger.debug(
+                            f"AIEmbedding RateLimit Wait Time {call_id}: {(end_time - start_time) * 1000:.2f}ms (N_TOKENS={num_tokens_input})"
+                        )
                     start_time = time.time()
                     match embedding_type:
                         case AIEmbeddingType.QUERY:
@@ -914,9 +997,10 @@ async def ai_embedding(
                     response = response.json()
 
                     end_time = time.time()
-                    logger.debug(
-                        f"AIEmbedding Call {call_id}: {(end_time - start_time) * 1000:.2f}ms (N_TOKENS={num_tokens_input})"
-                    )
+                    if DEBUG:
+                        logger.debug(
+                            f"AIEmbedding Call {call_id}: {(end_time - start_time) * 1000:.2f}ms (N_TOKENS={num_tokens_input})"
+                        )
                     response_embeddings_jina: list[AIEmbedding] = []
                     if "data" not in response:
                         raise ValueError(
@@ -929,9 +1013,10 @@ async def ai_embedding(
                             np.array(embedding_obj["embedding"])
                         )
                     t2 = time.time()
-                    logger.debug(
-                        f"AIEmbedding Decoding Time {call_id}: {(t2 - end_time) * 1000:.2f}ms"
-                    )
+                    if DEBUG:
+                        logger.debug(
+                            f"AIEmbedding Decoding Time {call_id}: {(t2 - end_time) * 1000:.2f}ms"
+                        )
                     text_embeddings_response = response_embeddings_jina
                     break
                 except (
@@ -975,7 +1060,8 @@ async def ai_embedding(
                 )
                 cache.set(cache_key, embedding)  # pyright: ignore[reportUnknownMemberType]
         end_time = time.time()
-        logger.debug(f"Cache Write Time: {(end_time - start_time) * 1000:.2f}ms")
+        if DEBUG:
+            logger.debug(f"Cache Write Time: {(end_time - start_time) * 1000:.2f}ms")
     for index, embedding in zip(
         required_text_embeddings_indices, text_embeddings_response, strict=True
     ):
@@ -1009,10 +1095,10 @@ async def ai_rerank(
     backoff_algo: Callable[[int], float] = lambda i: min(2**i, 5),
 ) -> list[float]:
     text_scores: list[float | None] = [None] * len(texts)
-    if cache is not None:
+    if g_cache is not None:
         for i, text in enumerate(texts):
             cache_key = get_rerank_cache_key(model, query, text)
-            cache_result = cast(Any, cache.get(cache_key))  # pyright: ignore[reportUnknownMemberType]
+            cache_result = cast(Any, g_cache.get(cache_key))  # pyright: ignore[reportUnknownMemberType]
             if cache_result is not None:
                 # cast instead of assert isinstance, because of ints
                 cache_result = float(cache_result)
@@ -1024,7 +1110,7 @@ async def ai_rerank(
     unprocessed_texts = [texts[i] for i in unprocessed_indices]
     num_tokens_input = sum(ai_num_tokens(model, text) for text in unprocessed_texts)
 
-    relevancy_scores: list[float] | None = None
+    relevance_scores: list[float] | None = None
     match model.company:
         case "cohere" | "together":
             for i in range(num_ratelimit_retries):
@@ -1040,7 +1126,9 @@ async def ai_rerank(
                             if top_k is None:  # Together doesn't accept null for top_k
                                 top_k = len(unprocessed_texts)
                     if cohere_client is None:
-                        raise AIValueError("Cohere Credentials are not available")
+                        raise AIValueError(
+                            f"{model.company.capitalize()} Credentials are not available"
+                        )
                     response = await cohere_client.rerank(
                         model=model.model,
                         query=query,
@@ -1050,7 +1138,7 @@ async def ai_rerank(
                     original_order_results = sorted(
                         response.results, key=lambda x: x.index
                     )
-                    relevancy_scores = [
+                    relevance_scores = [
                         result.relevance_score for result in original_order_results
                     ]
                     break
@@ -1059,11 +1147,16 @@ async def ai_rerank(
                     httpx.ConnectError,
                     httpx.RemoteProtocolError,
                 ):
-                    logger.warning("Cohere RateLimitError")
-                except cohere.core.ApiError as e:
-                    logger.error(f"Cohere Unknown Error: {e}")
-            if relevancy_scores is None:
-                raise AITimeoutError("Cannot overcome Cohere RateLimitError")
+                    logger.warning(f"{model.company.capitalize()} RateLimitError")
+                except cohere.errors.bad_request_error.BadRequestError:
+                    logger.exception(
+                        f"{model.company.capitalize()} had BadRequestError"
+                    )
+                    raise
+            if relevance_scores is None:
+                raise AITimeoutError(
+                    f"Cannot overcome {model.company.capitalize()} RateLimitError"
+                )
         case "voyageai":
             for i in range(num_ratelimit_retries):
                 try:
@@ -1083,14 +1176,14 @@ async def ai_rerank(
                         voyageai_response.results,
                         key=lambda x: int(x.index),  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]
                     )
-                    relevancy_scores = [
+                    relevance_scores = [
                         float(result.relevance_score)  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]
                         for result in original_order_results
                     ]
                     break
                 except voyageai.error.RateLimitError:
                     logger.warning("VoyageAI RateLimitError")
-            if relevancy_scores is None:
+            if relevance_scores is None:
                 raise AITimeoutError("Cannot overcome VoyageAI RateLimitError")
         case "jina":
             for i in range(num_ratelimit_retries):
@@ -1116,7 +1209,7 @@ async def ai_rerank(
                     original_order_results = sorted(
                         response["results"], key=lambda x: x["index"]
                     )
-                    relevancy_scores = [
+                    relevance_scores = [
                         float(result["relevance_score"])
                         for result in original_order_results
                     ]
@@ -1129,7 +1222,7 @@ async def ai_rerank(
                     httpx.ConnectTimeout,
                 ):
                     logger.warning("JinaAI RateLimitError")
-            if relevancy_scores is None:
+            if relevance_scores is None:
                 raise AITimeoutError("Cannot overcome Cohere RateLimitError")
         case "huggingface":
             model_name = model.model
@@ -1142,7 +1235,7 @@ async def ai_rerank(
                         model_name,
                         device=DEVICE,
                     )
-                else:
+                else: # This should work for Qwen/Qwen3-Reranker-4B etc.
                     hf_cross_encoders[model_name] = CrossEncoder(
                         model_name,
                         device=DEVICE,
@@ -1155,78 +1248,53 @@ async def ai_rerank(
                     scores = hf_cross_encoder.predict(  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
                         [(query, document) for document in unprocessed_texts]
                     )
-                    relevancy_scores = [float(score) for score in scores]
+                    relevance_scores = [float(score) for score in scores]
                 case MxbaiRerankV2():
                     results = hf_cross_encoder.rank(  # pyright: ignore[reportUnknownMemberType]
                         query=query,
                         documents=unprocessed_texts,
                     )
                     results.sort(key=lambda x: x.index)
-                    relevancy_scores = [result.score for result in results]
+                    relevance_scores = [result.score for result in results]
+        case "modal":
+            for i in range(num_ratelimit_retries):
+                try:
+                    await get_ai_connection().ai_wait_ratelimit(
+                        model, num_tokens_input, backoff_algo(i - 1) if i > 0 else None
+                    )
+                    async with get_ai_connection().modal_semaphore:
+                        query_documents = [(query, document) for document in unprocessed_texts]
+                        response = await get_ai_connection().modal_client.post(
+                            model.model,
+                            headers={
+                                "Modal-Key": os.environ["MODAL_KEY"],
+                                "Modal-Secret": os.environ["MODAL_SECRET"],
+                            },
+                            json={
+                                "query_documents": query_documents,
+                            },
+                        )
+                        result = await response.json()
+                        scores = [float(score) for score in result["scores"]]
+                        assert len(scores) == len(query_documents)
+                        break
+                except (
+                    httpx.HTTPStatusError,
+                    httpx.ConnectError,
+                    httpx.RemoteProtocolError,
+                    httpx.ReadTimeout,
+                    httpx.ConnectTimeout,
+                ):
+                    logger.warning("Modal RateLimitError")
+                    await asyncio.sleep(1)
+                    continue
 
-    assert len(unprocessed_indices) == len(relevancy_scores)
-    for index, score in zip(unprocessed_indices, relevancy_scores, strict=True):
-        if cache is not None:
+    assert len(unprocessed_indices) == len(relevance_scores)
+    for index, score in zip(unprocessed_indices, relevance_scores, strict=True):
+        if g_cache is not None:
             cache_key = get_rerank_cache_key(model, query, texts[index])
-            cache.set(cache_key, score)  # pyright: ignore[reportUnknownMemberType]
+            g_cache.set(cache_key, score)  # pyright: ignore[reportUnknownMemberType]
         text_scores[index] = score
 
     assert all(score is not None for score in text_scores)
     return cast(list[float], text_scores)
-
-def tiktoken_truncate_by_num_tokens(
-    s: str,
-    max_tokens: int,
-    *,
-    model: str = "cl100k_base",
-) -> str:
-    encoding = tiktoken.get_encoding(model)
-    tokens = encoding.encode(s)
-    tokens = tokens[:max_tokens]
-    return encoding.decode(tokens)
-
-async def modal_pointwise_score(
-    query_documents: list[tuple[str, str]],
-    *,
-    url: str | None = None,
-    timeout: float | None = None,
-    num_retries: int = 7,
-) -> list[float]:
-    if url is None:
-        url = "https://npip99--ze-rerank-v0-3-0-model-endpoint.modal.run/"
-
-    scores = None
-    for _retry in range(num_retries):
-        try:
-            if DRY_RUN:
-                await asyncio.sleep(0.3 + random.random() * 0.1)
-                scores = [random.random() for _ in query_documents]
-            else:
-                async with (
-                    MODAL_SEMAPHORE,
-                    get_client().post(
-                        url,
-                        headers={
-                            "Modal-Key": os.environ["MODAL_KEY"],
-                            "Modal-Secret": os.environ["MODAL_SECRET"],
-                        },
-                        json={
-                            "query_documents": query_documents,
-                        },
-                        timeout=aiohttp.ClientTimeout(total=timeout)
-                        if timeout is not None
-                        else None,
-                    ) as response,
-                ):
-                    result = await response.json()
-                scores = [float(score) for score in result["scores"]]
-                assert len(scores) == len(query_documents)
-                break  # Exit Loop
-        except (aiohttp.ClientError, TimeoutError) as e:
-            delay = 0.25 * (2**_retry)
-            print(f"Request timed out: {e}. Retrying in {delay}s...")
-            await asyncio.sleep(delay)
-    if scores is None:
-        raise TimeoutError("Could not recover from API errors")
-
-    return scores
