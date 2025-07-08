@@ -23,11 +23,14 @@ class NarrativeQAIngestor(BaseIngestor):
         qrels: list[QRel] = []
 
         # This dataset is too big, will only load first 1000.
-        for i, (query, document) in tqdm(enumerate(zip(dataset["question"][:1000], dataset["document"][:1000], strict=True)), desc="Datapoints"):
+        for i, (query, document) in tqdm(
+            enumerate(
+                zip(dataset["question"][:1000], dataset["document"][:1000], strict=True)
+            ),
+            desc="Datapoints",
+        ):
             queries.append(Query(id=str(i), query=query["text"]))
-            documents.append(
-                Document(id=str(i), content=document["text"])
-            )
+            documents.append(Document(id=str(i), content=document["text"]))
             qrels.append(QRel(query_id=str(i), document_id=str(i), score=1))
 
         return clean_dataset(queries, documents, qrels)

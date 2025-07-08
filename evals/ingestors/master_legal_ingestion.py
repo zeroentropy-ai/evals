@@ -40,7 +40,7 @@ class MasterLegalIngestor(BaseIngestor):
         ]
         corpus_dataset = cast(Any, load_dataset(self.dataset_name, "corpus"))["corpus"]
         qrels_dataset = cast(Any, load_dataset(self.dataset_name, "default"))[
-            self.split  
+            self.split
         ]
 
         # Create Query objects

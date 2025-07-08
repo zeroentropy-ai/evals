@@ -1,31 +1,34 @@
 import asyncio
 import os
 
-from ai import AIRerankModel, ai_rerank, tiktoken_truncate_by_num_tokens
-from common import ZEDataset, ZEResults
-from run_ingestors import EVAL_DATASETS
 from tqdm import tqdm
-from utils import read_num_lines_pbar
 
+from evals.ai import AIRerankModel, ai_rerank, tiktoken_truncate_by_num_tokens
+from evals.common import ZEDataset, ZEResults
 from evals.run_embeddings import MERGE_STATUS, RETRIEVAL_METHOD
+from evals.run_ingestors import EVAL_DATASETS
+from evals.utils import read_num_lines_pbar
 
 # pyright: reportUnknownMemberType=false
 # pyright: reportUnknownArgumentType=false
 # pyright: reportUnknownVariableType=false
 
-# A string type implies a modal url.
-type AIRerankerType = AIRerankModel | str
-
 DATASETS = EVAL_DATASETS
 NUM_SIMULTANEOUS_LINES = 25
 NUM_SIMULTANEOUS_RERANKS = 150
 VOYAGE_RERANKER = AIRerankModel(company="voyageai", model="rerank-2")
-RERANKERS: dict[str, AIRerankerType] = {
-    #"cohere": AIRerankModel(company="cohere", model="rerank-v3.5"),
-    #"salesforce": AIRerankModel(company="together", model="Salesforce/Llama-Rank-V1"),
-    "zeroentropy-small": AIRerankModel(company="modal", model="https://npip99--ze-rerank-small-v0-3-0-model-endpoint.modal.run/"),
-    "zeroentropy-large": AIRerankModel(company="modal", model="https://npip99--ze-rerank-v0-3-0-model-endpoint.modal.run/"),
-    #"voyage": AIRerankModel(company="voyageai", model="rerank-2"),
+RERANKERS: dict[str, AIRerankModel] = {
+    # "cohere": AIRerankModel(company="cohere", model="rerank-v3.5"),
+    # "salesforce": AIRerankModel(company="together", model="Salesforce/Llama-Rank-V1"),
+    "zeroentropy-small": AIRerankModel(
+        company="modal",
+        model="https://npip99--ze-rerank-small-v0-3-0-model-endpoint.modal.run/",
+    ),
+    "zeroentropy-large": AIRerankModel(
+        company="modal",
+        model="https://npip99--ze-rerank-v0-3-0-model-endpoint.modal.run/",
+    ),
+    # "voyage": AIRerankModel(company="voyageai", model="rerank-2"),
 }
 RERANK_MAX_TOKENS = 4096
 RERANK_MAX_BATCH_CHARACTERS = 64_000
@@ -39,7 +42,7 @@ DEBUG = False
 
 
 async def process_query(
-    reranker: AIRerankerType,
+    reranker: AIRerankModel,
     query: str,
     documents: list[str],
 ) -> list[float]:
@@ -65,7 +68,7 @@ async def process_query(
 
 async def rerank_ze_results(
     ze_results: ZEResults,
-    rerankers: dict[str, AIRerankerType],
+    rerankers: dict[str, AIRerankModel],
 ) -> ZEResults:
     ze_results = ze_results.model_copy(deep=True)
 
@@ -89,7 +92,7 @@ async def rerank_ze_results(
 
 async def rerank_dataset(
     dataset: ZEDataset,
-    rerankers: dict[str, AIRerankerType],
+    rerankers: dict[str, AIRerankModel],
 ) -> None:
     output_file_path = dataset.file_path(SAVE_NAME)
     input_file_path = dataset.file_path(READ_NAME)

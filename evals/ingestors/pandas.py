@@ -13,7 +13,7 @@ class PandasIngestor(BaseIngestor):
     @override
     def dataset_id(self) -> str:
         return "evals/pandas"
-    
+
     @override
     def ingest(self) -> tuple[list[Query], list[Document], list[QRel]]:
         dataset_name = "pacovaldez/pandas-documentation"
@@ -27,5 +27,5 @@ class PandasIngestor(BaseIngestor):
             queries.append(Query(id=str(i), query=datum["title"]))
             documents.append(Document(id=str(i), content=datum["context"]))
             qrels.append(QRel(query_id=str(i), document_id=str(i), score=1))
-        
+
         return clean_dataset(queries, documents, qrels)

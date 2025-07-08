@@ -1,0 +1,19 @@
+{
+    "include": [
+        "evals"
+    ],
+    "exclude": [
+        "**/.ipynb_checkpoints",
+        "**/*.ipynb"
+    ],
+    "extraPaths": ["typings"],
+    "reportUnreachable": "warning",
+    "reportUnusedImport": "warning",
+    "reportUnusedVariable": "warning",
+    "reportUnusedParameter": "hint",
+    "reportUnusedFunction": false,
+    "reportUnusedCallResult": "none",
+    "reportCallInDefaultInitializer": false,
+    "reportExplicitAny": false,
+    "reportAny": false
+}

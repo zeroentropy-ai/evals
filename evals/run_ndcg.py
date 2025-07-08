@@ -34,7 +34,9 @@ def analyze_ndcg(dataset: ZEDataset) -> None:
     print(f"NDCG@{K} for {dataset.id}:")
 
     total_lines = 0
-    with open(dataset.file_path(f"{RETRIEVAL_METHOD}_{MERGE_STATUS}ze_results.jsonl")) as f:
+    with open(
+        dataset.file_path(f"{RETRIEVAL_METHOD}_{MERGE_STATUS}ze_results.jsonl")
+    ) as f:
         for _line in f:
             total_lines += 1
 
@@ -81,8 +83,8 @@ def analyze_ndcg(dataset: ZEDataset) -> None:
     for score_name, ndcgs in all_ndcgs.items():
         if score_name == "default" and not SHOW_DEFAULT:
             continue
-        #assert len(ndcgs) == len(all_ndcgs["default"])
-        if len(ndcgs)!= len(all_ndcgs["default"]):
+        # assert len(ndcgs) == len(all_ndcgs["default"])
+        if len(ndcgs) != len(all_ndcgs["default"]):
             print(f"{score_name}: {len(ndcgs)} / {len(all_ndcgs['default'])}")
         average_ndcg = avg(ndcgs)
         if len(ndcgs) > 1:
@@ -98,6 +100,7 @@ def analyze_ndcg(dataset: ZEDataset) -> None:
 def main() -> None:
     for dataset in EVAL_DATASETS:
         analyze_ndcg(dataset)
+
 
 if __name__ == "__main__":
     main()

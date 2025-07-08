@@ -17,7 +17,7 @@ class StackoverflowqaIngestor(BaseIngestor):
     @override
     def ingest(self) -> tuple[list[Query], list[Document], list[QRel]]:
         dataset_name = "mteb/stackoverflow-qa"
-        
+
         # Load both question-answer pairs and the text corpus
         qa_dataset = cast(Any, load_dataset(dataset_name, "queries"))["queries"]
         corpus_dataset = cast(Any, load_dataset(dataset_name, "corpus"))["corpus"]
@@ -46,7 +46,9 @@ class StackoverflowqaIngestor(BaseIngestor):
 
         # Create qrels from relevant passage IDs
         qrels: list[QRel] = []
-        for query, doc in tqdm(zip(qa_dataset, corpus_dataset, strict=True), desc="QRels"):
+        for query, doc in tqdm(
+            zip(qa_dataset, corpus_dataset, strict=True), desc="QRels"
+        ):
             query_id = query["_id"]
             doc_id = doc["_id"]
             qrels.append(

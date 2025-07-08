@@ -12,5 +12,6 @@ def main() -> None:
     asyncio.run(run_rerankers())
     run_ndcg()
 
+
 if __name__ == "__main__":
     main()

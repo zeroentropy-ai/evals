@@ -14,7 +14,7 @@ class QuoraSwedishIngestor(BaseIngestor):
     @override
     def dataset_id(self) -> str:
         return "evals/quora_swedish"
-    
+
     @override
     def ingest(self) -> tuple[list[Query], list[Document], list[QRel]]:
         dataset_name = "Gabriel/quora_swe"

@@ -75,7 +75,7 @@ def validate_dataset(
     queries: list[Query],
     documents: list[Document],
     qrels: list[QRel],
-) -> None:
+) -> tuple[list[Query], list[Document], list[QRel]]:
     query_ids = {query.id for query in queries}
     document_ids = {document.id for document in documents}
     qrel_ids = {(qrel.query_id, qrel.document_id) for qrel in qrels}
@@ -85,10 +85,11 @@ def validate_dataset(
 
     qrels_new: list[QRel] = []
     for qrel in qrels:
-        if ((qrel.query_id in query_ids) and (qrel.document_id in document_ids)):
+        if (qrel.query_id in query_ids) and (qrel.document_id in document_ids):
             qrels_new.append(qrel)
 
-    return qrels_new
+    return queries, documents, qrels_new
+
 
 def remove_duplicates(
     queries: list[Query],
@@ -226,7 +227,9 @@ def clean_dataset(
     documents: list[Document],
     qrels: list[QRel],
 ) -> tuple[list[Query], list[Document], list[QRel]]:
-    qrels = validate_dataset(queries, documents, qrels) #some datasets accidently put invalid qrels for some reason
+    queries, documents, qrels = validate_dataset(
+        queries, documents, qrels
+    )  # some datasets accidently put invalid qrels for some reason
 
     return chunk_long_strings(
         *remove_nonpositive_queries(

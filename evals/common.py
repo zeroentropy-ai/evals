@@ -1,7 +1,8 @@
 from typing import Any
 
 from pydantic import AliasChoices, BaseModel, Field, computed_field
-from utils import ROOT
+
+from evals.utils import ROOT
 
 
 class ZEDataset(BaseModel):
@@ -39,11 +40,6 @@ class ZEDataset(BaseModel):
     def ze_results_path(self) -> str:
         return self.file_path("ze_results.jsonl")
 
-    @computed_field
-    @property
-    def ai_scores_path(self) -> str:
-        return self.file_path("ai_scores.json")
-
 
 class Document(BaseModel):
     id: str = Field(validation_alias=AliasChoices("document_id", "id"))
@@ -76,39 +72,3 @@ class ZEResults(BaseModel):
     query_id: str
     query: str
     documents: list[Document]
-
-
-# Pairs Dataset
-
-
-class Pair(BaseModel):
-    dataset_id: str | None = None
-    pair_id: str
-    query_id: str
-    query: str
-    document_a: Document
-    document_b: Document
-
-
-class Pairs(BaseModel):
-    pairs: list[Pair]
-
-
-# Scored Pairs
-
-
-class PairScore(BaseModel):
-    thought: str
-    score: float
-
-
-class ScoredPair(BaseModel):
-    pair: Pair
-    openai_score: PairScore
-    gemini_score: PairScore
-    anthropic_score: PairScore
-
-
-# ai_scores.json
-class ScoredPairs(BaseModel):
-    scored_pairs: list[ScoredPair]

@@ -1235,7 +1235,7 @@ async def ai_rerank(
                         model_name,
                         device=DEVICE,
                     )
-                else: # This should work for Qwen/Qwen3-Reranker-4B etc.
+                else:  # This should work for Qwen/Qwen3-Reranker-4B etc.
                     hf_cross_encoders[model_name] = CrossEncoder(
                         model_name,
                         device=DEVICE,
@@ -1263,12 +1263,14 @@ async def ai_rerank(
                         model, num_tokens_input, backoff_algo(i - 1) if i > 0 else None
                     )
                     async with get_ai_connection().modal_semaphore:
-                        query_documents = [(query, document) for document in unprocessed_texts]
+                        query_documents = [
+                            (query, document) for document in unprocessed_texts
+                        ]
                         response = await get_ai_connection().modal_client.post(
                             model.model,
                             headers={
-                                "Modal-Key": os.environ.get("MODAL_KEY"),
-                                "Modal-Secret": os.environ.get("MODAL_SECRET"),
+                                "Modal-Key": os.environ["MODAL_KEY"],
+                                "Modal-Secret": os.environ["MODAL_SECRET"],
                             },
                             json={
                                 "query_documents": query_documents,
@@ -1287,7 +1289,8 @@ async def ai_rerank(
                 ):
                     logger.warning("Modal RateLimitError")
                     await asyncio.sleep(1)
-                    continue
+            if relevance_scores is None:
+                raise AITimeoutError("Cannot overcome Modal RateLimitError")
 
     assert len(unprocessed_indices) == len(relevance_scores)
     for index, score in zip(unprocessed_indices, relevance_scores, strict=True):

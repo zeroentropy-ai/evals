@@ -14,13 +14,13 @@ class QuoraIngestor(BaseIngestor):
     @override
     def dataset_id(self) -> str:
         return "evals/quora"
-    
+
     @override
     def ingest(self) -> tuple[list[Query], list[Document], list[QRel]]:
         dataset_name = "BeIR/quora-generated-queries"
 
         overall_dataset = cast(Any, load_dataset(dataset_name))["train"]
-        
+
         queries: list[Query] = []
         documents: list[Document] = []
         qrels: list[QRel] = []
@@ -30,7 +30,9 @@ class QuoraIngestor(BaseIngestor):
 
         for i in tqdm(random_indices, desc="Datapoints"):
             queries.append(Query(id=str(i), query=overall_dataset[int(i)]["query"]))
-            documents.append(Document(id=str(i), content=overall_dataset[int(i)]["text"]))
+            documents.append(
+                Document(id=str(i), content=overall_dataset[int(i)]["text"])
+            )
             qrels.append(QRel(query_id=str(i), document_id=str(i), score=1))
 
         return clean_dataset(queries, documents, qrels)

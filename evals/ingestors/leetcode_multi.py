@@ -16,7 +16,7 @@ class LeetcodeMultiLanguageIngestor(BaseIngestor):
     @override
     def dataset_id(self) -> str:
         return f"evals/leetcode_{self.language}"
-    
+
     @override
     def ingest(self) -> tuple[list[Query], list[Document], list[QRel]]:
         dataset_name = "greengerong/leetcode"
@@ -27,7 +27,11 @@ class LeetcodeMultiLanguageIngestor(BaseIngestor):
 
         for datum in tqdm(dataset, desc="Datapoints"):
             queries.append(Query(id=str(datum["id"]), query=datum["content"]))
-            documents.append(Document(id=str(datum["id"]), content=datum[self.language]))
-            qrels.append(QRel(query_id=str(datum["id"]), document_id=str(datum["id"]), score=1))
-        
+            documents.append(
+                Document(id=str(datum["id"]), content=datum[self.language])
+            )
+            qrels.append(
+                QRel(query_id=str(datum["id"]), document_id=str(datum["id"]), score=1)
+            )
+
         return clean_dataset(queries, documents, qrels)

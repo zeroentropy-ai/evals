@@ -152,7 +152,7 @@ MTEB_INGESTORS: list[BaseIngestor] = [
     #    dataset_name="belebeleretrieval",
     #    language="multilingual",
     #    split="test",
-    #),
+    # ),
     MasterMtebIngestor(
         task_name="MLQARetrieval",
         dataset_name="mlqaretrieval",
@@ -189,6 +189,7 @@ INGESTORS = MTEB_INGESTORS + NEW_INGESTORS + OLD_INGESTORS
 
 EVAL_DATASETS = [ingestor.dataset() for ingestor in INGESTORS]
 
+
 def main() -> None:
     for i, ingestor in enumerate(INGESTORS):
         dataset = ingestor.dataset()
@@ -218,6 +219,7 @@ def main() -> None:
         with open(f"{dataset_dir}/qrels.jsonl", "w") as f:
             for qrel in qrels:
                 f.write(qrel.model_dump_json() + "\n")
+
 
 if __name__ == "__main__":
     main()

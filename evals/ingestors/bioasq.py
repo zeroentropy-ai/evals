@@ -1,3 +1,4 @@
+from collections.abc import Iterable
 from typing import Any, cast, override
 
 from datasets import (  # pyright: ignore[reportMissingTypeStubs]
@@ -21,7 +22,9 @@ class BioasqIngestor(BaseIngestor):
 
         # Create queries from questions
         queries: list[Query] = []
-        for index, item in tqdm(enumerate(dataset), desc="Queries"):
+        for index, item in tqdm(
+            enumerate(cast(Iterable[Any], dataset)), desc="Queries"
+        ):
             queries.append(
                 Query(
                     id=f"q_{index}",
@@ -32,7 +35,9 @@ class BioasqIngestor(BaseIngestor):
 
         # Create documents from the text corpus
         documents: list[Document] = []
-        for index, doc in tqdm(enumerate(dataset), desc="Documents"):
+        for index, doc in tqdm(
+            enumerate(cast(Iterable[Any], dataset)), desc="Documents"
+        ):
             documents.append(
                 Document(
                     id=f"d_{index}",
