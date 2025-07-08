@@ -219,7 +219,7 @@ class AIEmbeddingType(Enum):
 
 
 class AIRerankModel(BaseModel):
-    company: Literal["cohere", "voyageai", "together", "jina", "huggingface"]
+    company: Literal["cohere", "voyageai", "together", "jina", "huggingface", "modal"]
     model: str
 
     @computed_field
@@ -1267,16 +1267,16 @@ async def ai_rerank(
                         response = await get_ai_connection().modal_client.post(
                             model.model,
                             headers={
-                                "Modal-Key": os.environ["MODAL_KEY"],
-                                "Modal-Secret": os.environ["MODAL_SECRET"],
+                                "Modal-Key": os.environ.get("MODAL_KEY"),
+                                "Modal-Secret": os.environ.get("MODAL_SECRET"),
                             },
                             json={
                                 "query_documents": query_documents,
                             },
                         )
-                        result = await response.json()
-                        scores = [float(score) for score in result["scores"]]
-                        assert len(scores) == len(query_documents)
+                        result = response.json()
+                        relevance_scores = [float(score) for score in result["scores"]]
+                        assert len(relevance_scores) == len(query_documents)
                         break
                 except (
                     httpx.HTTPStatusError,
