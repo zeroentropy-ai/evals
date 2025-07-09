@@ -22,7 +22,7 @@ dependencies = [
     "loguru==0.7.3",
     "openai==1.71.0",
     "anthropic==0.49.0",
-    "zeroentropy==0.1.0a5",
+    "zeroentropy==0.1.0a6",
     "cohere==5.14.2",
     "voyageai==0.3.2",
     "mxbai-rerank==0.1.3",

@@ -279,8 +279,9 @@ class MasterMtebIngestor(BaseIngestor):
 
         return clean_dataset(queries, documents, qrels)
 
-
-    def extract_instructions_query_content(self, query_data: str | dict[Any, Any] | Any) -> str:
+    def extract_instructions_query_content(
+        self, query_data: str | dict[Any, Any] | Any
+    ) -> str:
         if self.instructions is not None:
             return f"{self.instructions}\n\n{extract_query_content(query_data)}"
         else:
@@ -357,7 +358,9 @@ class MasterMtebIngestor(BaseIngestor):
                                 all_queries.append(
                                     Query(
                                         id=query_id,
-                                        query=self.extract_instructions_query_content(query_data),
+                                        query=self.extract_instructions_query_content(
+                                            query_data
+                                        ),
                                         metadata={
                                             "dataset": self.dataset_name,
                                             "language": "multilingual",
@@ -373,7 +376,9 @@ class MasterMtebIngestor(BaseIngestor):
                             all_queries.append(
                                 Query(
                                     id=query_id,
-                                    query=self.extract_instructions_query_content(query_data),
+                                    query=self.extract_instructions_query_content(
+                                        query_data
+                                    ),
                                     metadata={
                                         "dataset": self.dataset_name,
                                         "language": "multilingual",

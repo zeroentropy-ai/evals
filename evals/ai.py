@@ -23,6 +23,7 @@ import torch
 import voyageai
 import voyageai.client_async
 import voyageai.error
+import zeroentropy
 from anthropic import NOT_GIVEN, Anthropic, AsyncAnthropic, NotGiven
 from anthropic.types import MessageParam
 from dotenv import load_dotenv
@@ -38,6 +39,7 @@ from openlimit.redis_rate_limiters import (  # pyright: ignore[reportMissingType
 )
 from pydantic import BaseModel, ValidationError, computed_field
 from sentence_transformers import CrossEncoder, SentenceTransformer
+from zeroentropy import AsyncZeroEntropy
 
 from evals.utils import ROOT
 
@@ -219,7 +221,9 @@ class AIEmbeddingType(Enum):
 
 
 class AIRerankModel(BaseModel):
-    company: Literal["cohere", "voyageai", "together", "jina", "huggingface", "modal"]
+    company: Literal[
+        "cohere", "voyageai", "together", "jina", "huggingface", "modal", "zeroentropy"
+    ]
     model: str
 
     @computed_field
@@ -228,6 +232,8 @@ class AIRerankModel(BaseModel):
         match self.company:
             case "voyageai":
                 return 2_000_000
+            case "zeroentropy":
+                return 1_000_000
             case "cohere" | "jina" | "together" | "huggingface" | "modal":
                 return float("inf")
 
@@ -237,6 +243,8 @@ class AIRerankModel(BaseModel):
         match self.company:
             case "cohere":
                 return 1000
+            case "zeroentropy":
+                return 500
             case "voyageai":
                 # It says 100RPM but I can only get 60 out of it
                 return 60
@@ -266,6 +274,7 @@ class AIConnection:
     anthropic_client: AsyncAnthropic
     sync_anthropic_client: Anthropic
     google_client: AsyncOpenAI
+    zeroentropy_client: AsyncZeroEntropy
     voyageai_client: voyageai.client_async.AsyncClient | None
     cohere_client: cohere.AsyncClient | None
     together_client: AsyncOpenAI
@@ -291,6 +300,7 @@ class AIConnection:
         )
         self.anthropic_client = AsyncAnthropic()
         self.sync_anthropic_client = Anthropic()
+        self.zeroentropy_client = AsyncZeroEntropy()
         try:
             self.voyageai_client = voyageai.client_async.AsyncClient()
         except voyageai.error.AuthenticationError:
@@ -1112,6 +1122,37 @@ async def ai_rerank(
 
     relevance_scores: list[float] | None = None
     match model.company:
+        case "zeroentropy":
+            for i in range(num_ratelimit_retries):
+                try:
+                    await get_ai_connection().ai_wait_ratelimit(
+                        model, num_tokens_input, backoff_algo(i - 1) if i > 0 else None
+                    )
+                    response = (
+                        await get_ai_connection().zeroentropy_client.models.rerank(
+                            model=model.model,
+                            query=query,
+                            documents=unprocessed_texts,
+                            top_n=top_k,
+                        )
+                    )
+                    original_order_results = sorted(
+                        response.results, key=lambda x: x.index
+                    )
+                    relevance_scores = [
+                        result.relevance_score for result in original_order_results
+                    ]
+                    break
+                except (
+                    zeroentropy.RateLimitError,
+                    zeroentropy.APIConnectionError,
+                    httpx.ConnectError,
+                    httpx.RemoteProtocolError,
+                    httpx.TimeoutException,
+                ):
+                    logger.warning(f"{model.company.capitalize()} RateLimitError")
+            if relevance_scores is None:
+                raise AITimeoutError("Cannot overcome ZeroEntropy RateLimitError")
         case "cohere" | "together":
             for i in range(num_ratelimit_retries):
                 try:
@@ -1275,7 +1316,7 @@ async def ai_rerank(
                             json={
                                 "query_documents": query_documents,
                             },
-                            timeout=5*60,
+                            timeout=5 * 60,
                         )
                         result = response.json()
                         relevance_scores = [float(score) for score in result["scores"]]
@@ -1287,7 +1328,7 @@ async def ai_rerank(
                     httpx.RemoteProtocolError,
                     httpx.ReadTimeout,
                     httpx.ConnectTimeout,
-                ) as e:
+                ):
                     logger.exception("Modal RateLimitError")
                     await asyncio.sleep(1)
             if relevance_scores is None:

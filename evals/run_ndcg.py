@@ -33,7 +33,9 @@ def dcg(
 def analyze_ndcg(dataset: ZEDataset) -> None:
     print(f"NDCG@{K} for {dataset.id}:")
 
-    ze_results_path = dataset.file_path(f"{RETRIEVAL_METHOD}_{MERGE_STATUS}ze_results.jsonl")
+    ze_results_path = dataset.file_path(
+        f"{RETRIEVAL_METHOD}_{MERGE_STATUS}ze_results.jsonl"
+    )
     if not os.path.exists(ze_results_path):
         print("- Missing File")
         return

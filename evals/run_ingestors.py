@@ -187,15 +187,6 @@ MTEB_INGESTORS: list[BaseIngestor] = [
 ]
 
 INGESTORS = MTEB_INGESTORS + NEW_INGESTORS + OLD_INGESTORS
-INGESTORS = [
-    MasterMtebIngestor(
-        task_name="ArguAna",
-        dataset_name="arguana",
-        language="eng-Latn",
-        split="test",
-        instructions="Given a claim, find documents that refute the claim:",
-    ),
-]
 
 EVAL_DATASETS = [ingestor.dataset() for ingestor in INGESTORS]
 
