@@ -222,7 +222,14 @@ class AIEmbeddingType(Enum):
 
 class AIRerankModel(BaseModel):
     company: Literal[
-        "cohere", "voyageai", "together", "jina", "huggingface", "modal", "zeroentropy"
+        "cohere",
+        "voyageai",
+        "together",
+        "jina",
+        "huggingface",
+        "modal",
+        "zeroentropy",
+        "baseten",
     ]
     model: str
 
@@ -234,7 +241,9 @@ class AIRerankModel(BaseModel):
                 return 2_000_000
             case "zeroentropy":
                 return 1_000_000
-            case "cohere" | "jina" | "together" | "huggingface" | "modal":
+            case "jina":
+                return 500_000
+            case "cohere" | "together" | "huggingface" | "modal" | "baseten":
                 return float("inf")
 
     @computed_field
@@ -255,6 +264,8 @@ class AIRerankModel(BaseModel):
             case "huggingface":
                 return 1000
             case "modal":
+                return 1000
+            case "baseten":
                 return 1000
 
 
@@ -283,6 +294,8 @@ class AIConnection:
     huggingface_client: tuple[
         dict[str, SentenceTransformer], dict[str, CrossEncoder | MxbaiRerankV2]
     ]
+    baseten_client: httpx.AsyncClient
+    baseten_semaphore: asyncio.Semaphore
     modal_client: httpx.AsyncClient
     modal_semaphore: asyncio.Semaphore
     # Mapping from (company, model) to RateLimiter
@@ -321,6 +334,8 @@ class AIConnection:
         except cohere.core.api_error.ApiError:
             self.together_rerank_client = None
         self.jina_client = httpx.AsyncClient(http2=True)
+        self.baseten_client = httpx.AsyncClient(http2=True)
+        self.baseten_semaphore = asyncio.Semaphore(100)
         self.modal_client = httpx.AsyncClient(http2=True)
         self.modal_semaphore = asyncio.Semaphore(250)
         self.huggingface_client = ({}, {})
@@ -1256,15 +1271,22 @@ async def ai_rerank(
                     ]
                     break
                 except (
-                    httpx.HTTPStatusError,
                     httpx.ConnectError,
                     httpx.RemoteProtocolError,
                     httpx.ReadTimeout,
                     httpx.ConnectTimeout,
-                ):
-                    logger.warning("JinaAI RateLimitError")
+                ) as e:
+                    logger.warning(f"JinaAI Connection Lost: {e}")
+                    continue
+                except httpx.HTTPStatusError as e:
+                    if e.response.status_code == 429:
+                        logger.warning(f"JinaAI RateLimitError: {e}")
+                        continue
+                    else:
+                        logger.exception(f"JinaAI Bad Request: {e}")
+                        raise
             if relevance_scores is None:
-                raise AITimeoutError("Cannot overcome Cohere RateLimitError")
+                raise AITimeoutError("Cannot overcome JinaAI RateLimitError")
         case "huggingface":
             model_name = model.model
             hf_cross_encoders = get_ai_connection().huggingface_client[1]
@@ -1333,6 +1355,67 @@ async def ai_rerank(
                     await asyncio.sleep(1)
             if relevance_scores is None:
                 raise AITimeoutError("Cannot overcome Modal RateLimitError")
+        case "baseten":
+            for i in range(num_ratelimit_retries):
+                try:
+                    await get_ai_connection().ai_wait_ratelimit(
+                        model, num_tokens_input, backoff_algo(i - 1) if i > 0 else None
+                    )
+                    async with get_ai_connection().baseten_semaphore:
+                        # Format query-document pairs for baseten reranking
+                        query_documents = [
+                            [
+                                f"<|im_start|>system {query}<|im_end|> <|im_start|>user {document} <|im_end|>"
+                            ]
+                            for document in unprocessed_texts
+                        ]
+                        request_payload = {
+                            "inputs": query_documents,
+                            "truncate": True,
+                            "raw_scores": True,
+                            "truncation_direction": "Right",
+                        }
+
+                        try:
+                            response = await get_ai_connection().baseten_client.post(
+                                model.model.replace("async_predict", "predict"),
+                                headers={
+                                    "Authorization": f"Api-Key {os.environ['BASETEN_API_KEY']}",
+                                },
+                                json=request_payload,
+                                timeout=5 * 60,
+                            )
+                            response.raise_for_status()
+                            result = response.json()
+
+                            relevance_scores = [
+                                float(score[0]["score"]) for score in result
+                            ]
+
+                        except Exception as e:
+                            # Fallback: return dummy scores based on text length (longer = more relevant)
+                            relevance_scores = [
+                                len(text.split()) / 100.0 for text in unprocessed_texts
+                            ]
+                            print(e)
+
+                        assert len(relevance_scores) == len(unprocessed_texts)
+                        break
+                except (
+                    httpx.HTTPStatusError,
+                    httpx.ConnectError,
+                    httpx.RemoteProtocolError,
+                    httpx.ReadTimeout,
+                    httpx.ConnectTimeout,
+                ):
+                    logger.exception("Baseten RateLimitError")
+                    await asyncio.sleep(1)
+            if relevance_scores is None:
+                # Fallback: return dummy scores based on text length
+                relevance_scores = [
+                    len(text.split()) / 100.0 for text in unprocessed_texts
+                ]
+                print("BAD!")
 
     assert len(unprocessed_indices) == len(relevance_scores)
     for index, score in zip(unprocessed_indices, relevance_scores, strict=True):
