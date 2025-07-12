@@ -1,4 +1,5 @@
 from evals.ai import AIRerankModel
+from evals.common import RerankerName, RetrievalMethod
 from evals.ingestors.bioasq import BioasqIngestor
 from evals.ingestors.common import BaseIngestor
 from evals.ingestors.cosqa import CosqaIngestor
@@ -19,7 +20,6 @@ from evals.ingestors.qmsum import QMSumIngestor
 from evals.ingestors.quora import QuoraIngestor
 from evals.ingestors.quora_swedish import QuoraSwedishIngestor
 from evals.ingestors.stackoverflowqa import StackoverflowqaIngestor
-from evals.common import RerankerName, RetrievalMethod
 
 ALL_RERANKERS: dict[RerankerName, AIRerankModel] = {
     "cohere": AIRerankModel(company="cohere", model="rerank-v3.5"),
@@ -208,7 +208,7 @@ MTEB_INGESTORS: list[BaseIngestor] = [
         split="test",
     ),
 ]
-
+ALL_INGESTORS = MTEB_INGESTORS + NEW_INGESTORS + OLD_INGESTORS
 DEFAULT_INGESTORS = MTEB_INGESTORS + NEW_INGESTORS + OLD_INGESTORS
 DEFAULT_MAX_QUERIES = 1000
 DEFAULT_RETRIEVAL_METHOD: RetrievalMethod = "openai_small"

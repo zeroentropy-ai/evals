@@ -2,15 +2,26 @@ import math
 import os
 from collections import defaultdict
 
-from evals.common import RerankerScores, ZEDataset, ZEResults
+from evals.common import (
+    RerankerName,
+    RerankerScores,
+    RetrievalMethod,
+    ZEDataset,
+    ZEResults,
+)
 from evals.ingestors.common import BaseIngestor
-from evals.types import DEFAULT_INGESTORS, DEFAULT_INCLUDE_RELEVANT_DOCS, DEFAULT_RETRIEVAL_METHOD, DEFAULT_RERANKERS
-from evals.common import RerankerName, RetrievalMethod
+from evals.types import (
+    DEFAULT_INCLUDE_RELEVANT_DOCS,
+    DEFAULT_INGESTORS,
+    DEFAULT_RERANKERS,
+    DEFAULT_RETRIEVAL_METHOD,
+)
 from evals.utils import argsort, avg
 
 DEFAULT_K = 10
 
 SHOW_DEFAULT = True
+
 
 def dcg(
     ground_truth_scores: list[float],
@@ -25,6 +36,7 @@ def dcg(
         for rank, idx in enumerate(reranked_order[:k])
     )
     return dcg
+
 
 def analyze_ndcg(
     dataset: ZEDataset,
@@ -46,16 +58,13 @@ def analyze_ndcg(
         for _line in f:
             total_lines += 1
             ze_results = ZEResults.model_validate_json(_line)
-            human_scores : list[float] = [
+            human_scores: list[float] = [
                 document.scores.get("human", 0.0) for document in ze_results.documents
             ]
             idcg = dcg(human_scores, human_scores, k=k)
             if idcg == 0:
                 continue
-            ground_truth[ze_results.query_id] = (
-                human_scores,
-                idcg
-            )
+            ground_truth[ze_results.query_id] = (human_scores, idcg)
             default_ndcgs.append(
                 dcg(human_scores, [-i for i in range(len(human_scores))], k=k) / idcg
             )
@@ -63,15 +72,20 @@ def analyze_ndcg(
         average_ndcg = avg(default_ndcgs)
         if len(default_ndcgs) > 1:
             stderr_ndcg = (
-                sum((x - average_ndcg) ** 2 for x in default_ndcgs) / (len(default_ndcgs) - 1)
+                sum((x - average_ndcg) ** 2 for x in default_ndcgs)
+                / (len(default_ndcgs) - 1)
             ) ** 0.5
             stderr_ndcg = stderr_ndcg / (len(default_ndcgs) ** 0.5)
         else:
             stderr_ndcg = float("nan")
-        print(f"- {len(default_ndcgs)}/{total_lines} - {retrieval_method:.<25}{average_ndcg:.5f} ± {stderr_ndcg:.5f}")
+        print(
+            f"- {len(default_ndcgs)}/{total_lines} - {retrieval_method:.<25}{average_ndcg:.5f} ± {stderr_ndcg:.5f}"
+        )
 
     for reranker in rerankers:
-        latest_ze_results_path = dataset.latest_ze_results_path(retrieval_method, include_relevant_docs, reranker)
+        latest_ze_results_path = dataset.latest_ze_results_path(
+            retrieval_method, include_relevant_docs, reranker
+        )
         if not os.path.exists(latest_ze_results_path):
             print(f"- Missing Latest ZeResults for {reranker}")
             continue
@@ -82,7 +96,9 @@ def analyze_ndcg(
                 if reranker_data.query_id not in ground_truth:
                     continue
                 human_scores, idcg = ground_truth[reranker_data.query_id]
-                reranker_scores = [document.scores["reranker"] for document in reranker_data.documents]
+                reranker_scores = [
+                    document.scores["reranker"] for document in reranker_data.documents
+                ]
                 ndcg = dcg(human_scores, reranker_scores, k=k) / idcg
                 all_ndcgs.append(ndcg)
         if len(all_ndcgs) == 0:
@@ -96,7 +112,9 @@ def analyze_ndcg(
             stderr_ndcg = stddev_ndcg / (len(all_ndcgs) ** 0.5)
         else:
             stderr_ndcg = float("nan")
-        print(f"- {len(all_ndcgs)}/{total_lines} - {reranker:.<25}{average_ndcg:.5f} ± {stderr_ndcg:.5f}")
+        print(
+            f"- {len(all_ndcgs)}/{total_lines} - {reranker:.<25}{average_ndcg:.5f} ± {stderr_ndcg:.5f}"
+        )
 
 
 def main(
@@ -110,6 +128,7 @@ def main(
     datasets = [ingestor.dataset() for ingestor in ingestors]
     for dataset in datasets:
         analyze_ndcg(dataset, retrieval_method, include_relevant_docs, rerankers, k)
+
 
 if __name__ == "__main__":
     main()

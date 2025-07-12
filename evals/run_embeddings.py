@@ -15,17 +15,20 @@ from evals.ai import (
     ai_embedding,
     tiktoken_truncate_by_num_tokens,
 )
-from evals.common import Document, QRel, Query, ZEDataset, ZEResults
+from evals.common import Document, QRel, Query, RetrievalMethod, ZEDataset, ZEResults
 from evals.ingestors.common import BaseIngestor
-from evals.types import DEFAULT_INGESTORS, DEFAULT_INCLUDE_RELEVANT_DOCS, DEFAULT_RETRIEVAL_METHOD
-from evals.common import RetrievalMethod
+from evals.types import (
+    DEFAULT_INCLUDE_RELEVANT_DOCS,
+    DEFAULT_INGESTORS,
+    DEFAULT_RETRIEVAL_METHOD,
+)
 from evals.utils import ROOT
-
 
 USE_EMBEDDINGS_CACHE = True
 EMBEDDING_MAX_TOKENS = 8192
 
 type nparr = np.ndarray[Any, Any]
+
 
 async def get_openai_small_embeddings(
     queries: list[Query],
@@ -267,7 +270,9 @@ async def generate_embeddings(
         )
 
     # Save all necessary data
-    with open(dataset.ze_results_path(retrieval_method, include_relevant_docs), "w") as f:
+    with open(
+        dataset.ze_results_path(retrieval_method, include_relevant_docs), "w"
+    ) as f:
         queries_processed = 0
         queries_skipped = 0
 
@@ -358,7 +363,9 @@ async def generate_embeddings(
             f.write(ze_results.model_dump_json() + "\n")
             queries_processed += 1
 
-    print(f"Data saved to {Path(dataset.ze_results_path(retrieval_method, include_relevant_docs)).relative_to(ROOT)}")
+    print(
+        f"Data saved to {Path(dataset.ze_results_path(retrieval_method, include_relevant_docs)).relative_to(ROOT)}"
+    )
     print(f"Processed {queries_processed} queries")
     if queries_skipped > 0:
         print(

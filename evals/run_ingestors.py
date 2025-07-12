@@ -3,6 +3,7 @@ import os
 from evals.ingestors.common import BaseIngestor, clean_dataset, limit_queries
 from evals.types import DEFAULT_INGESTORS, DEFAULT_MAX_QUERIES
 
+
 def main(
     *,
     ingestors: list[BaseIngestor] = DEFAULT_INGESTORS,

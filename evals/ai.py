@@ -2,6 +2,7 @@ import asyncio
 import base64
 import hashlib
 import json
+import math
 import os
 import time
 from collections.abc import Callable, Coroutine
@@ -39,6 +40,8 @@ from openlimit.redis_rate_limiters import (  # pyright: ignore[reportMissingType
 )
 from pydantic import BaseModel, ValidationError, computed_field
 from sentence_transformers import CrossEncoder, SentenceTransformer
+from transformers import AutoTokenizer
+from transformers.tokenization_utils_fast import PreTrainedTokenizerFast
 from zeroentropy import AsyncZeroEntropy
 
 from evals.utils import ROOT
@@ -54,6 +57,21 @@ DEBUG = False
 USING_VERTEX_AI = bool(os.environ.get("USING_VERTEX_AI"))
 
 AIEmbedding = np.ndarray[Literal[1], np.dtype[np.float32]]
+
+
+qwen_tokenizer: None | AutoTokenizer = None
+
+
+def get_qwen_tokenizer() -> PreTrainedTokenizerFast:
+    global qwen_tokenizer
+    if qwen_tokenizer is None:
+        qwen_tokenizer = cast(
+            AutoTokenizer,
+            AutoTokenizer.from_pretrained("Qwen/Qwen3-4B"),  # pyright: ignore[reportUnknownMemberType]
+        )
+    assert isinstance(qwen_tokenizer, PreTrainedTokenizerFast)
+    return qwen_tokenizer
+
 
 # AI Types
 
@@ -242,8 +260,10 @@ class AIRerankModel(BaseModel):
             case "zeroentropy":
                 return 1_000_000
             case "jina":
-                return 500_000
-            case "cohere" | "together" | "huggingface" | "modal" | "baseten":
+                return 2_000_000
+            case "baseten":
+                return 5_000_000
+            case "cohere" | "together" | "huggingface" | "modal":
                 return float("inf")
 
     @computed_field
@@ -1358,46 +1378,53 @@ async def ai_rerank(
         case "baseten":
             for i in range(num_ratelimit_retries):
                 try:
+                    input_texts: list[list[str]] = []
+                    for document in unprocessed_texts:
+                        system_prompt = f"""
+{query}
+""".strip()
+                        user_message = f"""
+{document}
+""".strip()
+                        messages = [
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": user_message},
+                        ]
+                        input_text = get_qwen_tokenizer().apply_chat_template(  # pyright: ignore[reportUnknownMemberType]
+                            messages,
+                            tokenize=False,
+                            add_generation_prompt=True,
+                        )
+                        assert isinstance(input_text, str)
+                        input_texts.append([input_text])
                     await get_ai_connection().ai_wait_ratelimit(
                         model, num_tokens_input, backoff_algo(i - 1) if i > 0 else None
                     )
                     async with get_ai_connection().baseten_semaphore:
-                        # Format query-document pairs for baseten reranking
-                        query_documents = [
-                            [
-                                f"<|im_start|>system {query}<|im_end|> <|im_start|>user {document} <|im_end|>"
-                            ]
-                            for document in unprocessed_texts
-                        ]
                         request_payload = {
-                            "inputs": query_documents,
+                            "inputs": input_texts,
                             "truncate": True,
                             "raw_scores": True,
                             "truncation_direction": "Right",
                         }
 
-                        try:
-                            response = await get_ai_connection().baseten_client.post(
-                                model.model.replace("async_predict", "predict"),
-                                headers={
-                                    "Authorization": f"Api-Key {os.environ['BASETEN_API_KEY']}",
-                                },
-                                json=request_payload,
-                                timeout=5 * 60,
-                            )
-                            response.raise_for_status()
-                            result = response.json()
+                        response = await get_ai_connection().baseten_client.post(
+                            model.model.replace("async_predict", "predict"),
+                            json=request_payload,
+                            headers={
+                                "Authorization": f"Api-Key {os.environ['BASETEN_API_KEY']}",
+                            },
+                            timeout=5 * 60,
+                        )
+                        response.raise_for_status()
+                        result = response.json()
 
-                            relevance_scores = [
-                                float(score[0]["score"]) for score in result
-                            ]
+                        def sigmoid(x: float) -> float:
+                            return 1 / (1 + math.exp(-x))
 
-                        except Exception as e:
-                            # Fallback: return dummy scores based on text length (longer = more relevant)
-                            relevance_scores = [
-                                len(text.split()) / 100.0 for text in unprocessed_texts
-                            ]
-                            print(e)
+                        relevance_scores = [
+                            sigmoid(float(score[0]["score"]) / 5.0) for score in result
+                        ]
 
                         assert len(relevance_scores) == len(unprocessed_texts)
                         break
@@ -1407,15 +1434,12 @@ async def ai_rerank(
                     httpx.RemoteProtocolError,
                     httpx.ReadTimeout,
                     httpx.ConnectTimeout,
+                    httpx.LocalProtocolError,
                 ):
                     logger.exception("Baseten RateLimitError")
                     await asyncio.sleep(1)
             if relevance_scores is None:
-                # Fallback: return dummy scores based on text length
-                relevance_scores = [
-                    len(text.split()) / 100.0 for text in unprocessed_texts
-                ]
-                print("BAD!")
+                relevance_scores = [0 for _ in unprocessed_texts]
 
     assert len(unprocessed_indices) == len(relevance_scores)
     for index, score in zip(unprocessed_indices, relevance_scores, strict=True):

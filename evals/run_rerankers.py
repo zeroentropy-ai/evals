@@ -1,38 +1,56 @@
 import asyncio
 import os
 from collections import defaultdict
+from contextlib import ExitStack
 from typing import TextIO
 
 from tqdm import tqdm
 
 from evals.ai import AIRerankModel, ai_rerank, tiktoken_truncate_by_num_tokens
-from evals.common import DocumentScores, ZEDataset, ZEResults, RerankerScores
+from evals.common import (
+    DocumentScores,
+    RerankerName,
+    RerankerScores,
+    RetrievalMethod,
+    ZEDataset,
+    ZEResults,
+)
 from evals.ingestors.common import BaseIngestor
-from evals.types import ALL_RERANKERS, DEFAULT_INGESTORS, DEFAULT_RERANKERS, DEFAULT_RETRIEVAL_METHOD, DEFAULT_INCLUDE_RELEVANT_DOCS
-from evals.common import RerankerName, RetrievalMethod
+from evals.types import (
+    ALL_RERANKERS,
+    DEFAULT_INCLUDE_RELEVANT_DOCS,
+    DEFAULT_INGESTORS,
+    DEFAULT_RERANKERS,
+    DEFAULT_RETRIEVAL_METHOD,
+)
 from evals.utils import read_num_lines_pbar
-
-from contextlib import ExitStack
-
 
 NUM_SIMULTANEOUS_LINES = 25
 
 RERANK_MAX_TOKENS = 4096
-RERANK_MAX_BATCH_CHARACTERS = 64_000
+DEFAULT_MAX_BATCH_CHARACTERS = 750_000
+company_to_max_batch_characters = {
+    "modal": 100_000,
+}
+
 
 async def process_query(
     reranker: AIRerankModel,
     query: str,
     documents: list[str],
 ) -> list[float]:
+    max_batch_characters = company_to_max_batch_characters.get(
+        reranker.company, DEFAULT_MAX_BATCH_CHARACTERS
+    )
+
     batches: list[list[str]] = []
     cumulative_length = 0
     for document in documents:
-        if len(batches) == 0 or cumulative_length > RERANK_MAX_BATCH_CHARACTERS:
+        if len(batches) == 0 or cumulative_length > max_batch_characters:
             batches.append([])
             cumulative_length = 0
         batches[-1].append(document)
-        cumulative_length += 20 + len(query) + len(document)
+        cumulative_length += 20 + len(query.encode()) + len(document.encode())
 
     all_reranked_scores: list[float] = []
     for batch in batches:
@@ -43,6 +61,7 @@ async def process_query(
         )
         all_reranked_scores.extend(reranked_scores)
     return all_reranked_scores
+
 
 async def rerank_dataset(
     dataset: ZEDataset,
@@ -56,7 +75,9 @@ async def rerank_dataset(
 
     processed_query_ids: dict[RerankerName, set[str]] = defaultdict(set)
     for reranker in rerankers:
-        latest_ze_results_path = dataset.latest_ze_results_path(retrieval_method, include_relevant_docs, reranker)
+        latest_ze_results_path = dataset.latest_ze_results_path(
+            retrieval_method, include_relevant_docs, reranker
+        )
         if os.path.exists(latest_ze_results_path):
             with open(latest_ze_results_path) as f:
                 for line in f:
@@ -73,39 +94,55 @@ async def rerank_dataset(
 
     with open(ze_results_path) as f, ExitStack() as stack:
         f_write: dict[RerankerName, TextIO] = {
-            reranker: stack.enter_context(open(dataset.latest_ze_results_path(retrieval_method, include_relevant_docs, reranker), "a"))
+            reranker: stack.enter_context(
+                open(
+                    dataset.latest_ze_results_path(
+                        retrieval_method, include_relevant_docs, reranker
+                    ),
+                    "a",
+                )
+            )
             for reranker in rerankers
         }
 
         async def wrapped_process_line(line: str) -> None:
             ze_results = ZEResults.model_validate_json(line)
-            need_rerank : list[RerankerName] = []
+            need_rerank: list[RerankerName] = []
             for reranker in rerankers:
                 if ze_results.query_id not in processed_query_ids[reranker]:
                     need_rerank.append(reranker)
             if len(need_rerank) > 0:
-
-                query_text = tiktoken_truncate_by_num_tokens(ze_results.query, RERANK_MAX_TOKENS)
+                query_text = tiktoken_truncate_by_num_tokens(
+                    ze_results.query, RERANK_MAX_TOKENS
+                )
                 document_texts = [
                     tiktoken_truncate_by_num_tokens(document.content, RERANK_MAX_TOKENS)
                     for document in ze_results.documents
                 ]
                 all_results: list[list[float]] = [
-                    await process_query(ALL_RERANKERS[reranker], query_text, document_texts)
+                    await process_query(
+                        ALL_RERANKERS[reranker], query_text, document_texts
+                    )
                     for reranker in need_rerank
                 ]
                 for reranker, results in zip(need_rerank, all_results, strict=False):
-                    reranker_scores : RerankerScores = RerankerScores(
-                        query_id=ze_results.query_id, 
+                    reranker_scores: RerankerScores = RerankerScores(
+                        query_id=ze_results.query_id,
                         documents=[
                             DocumentScores(
-                                document_id=document.id, 
-                                scores={"human" : document.scores.get("human", 0), "reranker" : result_score}
+                                document_id=document.id,
+                                scores={
+                                    "human": document.scores.get("human", 0),
+                                    "reranker": result_score,
+                                },
                             )
-                        for document, result_score in zip(ze_results.documents, results, strict=False)
-                        ]
+                            for document, result_score in zip(
+                                ze_results.documents, results, strict=False
+                            )
+                        ],
                     )
                     f_write[reranker].write(reranker_scores.model_dump_json() + "\n")
+                    f_write[reranker].flush()
             pbar.update(1)
 
         for line in f:
