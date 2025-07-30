@@ -26,13 +26,13 @@ ALL_RERANKERS: dict[RerankerName, AIRerankModel] = {
     "salesforce": AIRerankModel(company="together", model="Salesforce/Llama-Rank-V1"),
     "zeroentropy-large": AIRerankModel(company="zeroentropy", model="zerank-1"),
     "zeroentropy-small": AIRerankModel(company="zeroentropy", model="zerank-1-small"),
-    "zeroentropy-small-modal": AIRerankModel(
-        company="modal",
-        model="https://npip99--ze-rerank-small-v0-3-0-model-endpoint.modal.run/",
-    ),
     "zeroentropy-large-modal": AIRerankModel(
         company="modal",
-        model="https://npip99--ze-rerank-v0-3-0-model-endpoint.modal.run/",
+        model="https://zeroentropy--ze-rerank-v0-3-0-dev-model-endpoint.modal.run/",
+    ),
+    "zeroentropy-small-modal": AIRerankModel(
+        company="modal",
+        model="https://zeroentropy--ze-rerank-small-v0-3-0-dev-model-endpoint.modal.run/",
     ),
     "zeroentropy-baseten": AIRerankModel(
         company="baseten",
@@ -44,7 +44,7 @@ ALL_RERANKERS: dict[RerankerName, AIRerankModel] = {
     "jina": AIRerankModel(company="jina", model="jina-reranker-m0"),
     "qwen": AIRerankModel(
         company="modal",
-        model="https://npip99--qwen3-reranker-4b-model-endpoint.modal.run/",
+        model="https://zeroentropy--qwen3-reranker-4b-model-endpoint.modal.run/",
     ),
 }
 

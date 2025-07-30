@@ -258,7 +258,7 @@ class AIRerankModel(BaseModel):
             case "voyageai":
                 return 2_000_000
             case "zeroentropy":
-                return 1_000_000
+                return 20_000_000
             case "jina":
                 return 2_000_000
             case "baseten":
@@ -305,7 +305,7 @@ class AIConnection:
     anthropic_client: AsyncAnthropic
     sync_anthropic_client: Anthropic
     google_client: AsyncOpenAI
-    zeroentropy_client: AsyncZeroEntropy
+    zeroentropy_client: AsyncZeroEntropy | None
     voyageai_client: voyageai.client_async.AsyncClient | None
     cohere_client: cohere.AsyncClient | None
     together_client: AsyncOpenAI
@@ -333,7 +333,10 @@ class AIConnection:
         )
         self.anthropic_client = AsyncAnthropic()
         self.sync_anthropic_client = Anthropic()
-        self.zeroentropy_client = AsyncZeroEntropy()
+        if os.environ.get("ZEROENTROPY_API_KEY") is not None:
+            self.zeroentropy_client = AsyncZeroEntropy()
+        else:
+            self.zeroentropy_client = None
         try:
             self.voyageai_client = voyageai.client_async.AsyncClient()
         except voyageai.error.AuthenticationError:
@@ -1153,7 +1156,12 @@ async def ai_rerank(
 
     unprocessed_indices = [i for i, score in enumerate(text_scores) if score is None]
     unprocessed_texts = [texts[i] for i in unprocessed_indices]
-    num_tokens_input = sum(ai_num_tokens(model, text) for text in unprocessed_texts)
+    if model.company == "zeroentropy":
+        num_tokens_input = sum(
+            150 + len(query.encode()) + len(text.encode()) for text in unprocessed_texts
+        )
+    else:
+        num_tokens_input = sum(ai_num_tokens(model, text) for text in unprocessed_texts)
 
     relevance_scores: list[float] | None = None
     match model.company:
@@ -1163,13 +1171,14 @@ async def ai_rerank(
                     await get_ai_connection().ai_wait_ratelimit(
                         model, num_tokens_input, backoff_algo(i - 1) if i > 0 else None
                     )
-                    response = (
-                        await get_ai_connection().zeroentropy_client.models.rerank(
-                            model=model.model,
-                            query=query,
-                            documents=unprocessed_texts,
-                            top_n=top_k,
-                        )
+                    zeroentropy_client = get_ai_connection().zeroentropy_client
+                    if zeroentropy_client is None:
+                        raise AIValueError("ZeroEntropy Credentials are not available")
+                    response = await zeroentropy_client.models.rerank(
+                        model=model.model,
+                        query=query,
+                        documents=unprocessed_texts,
+                        top_n=top_k,
                     )
                     original_order_results = sorted(
                         response.results, key=lambda x: x.index

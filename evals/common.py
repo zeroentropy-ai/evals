@@ -1,11 +1,8 @@
-from pathlib import Path
 from typing import Any, Literal
 
 from pydantic import AliasChoices, BaseModel, Field, computed_field
 
 from evals.utils import ROOT
-
-EVALS_PATH: Path = Path(f"{ROOT}/data/datasets/evals")
 
 RetrievalMethod = Literal["openai_small", "bm25", "hybrid"]
 MergeStatus = Literal["merged", "unmerged"]
@@ -115,6 +112,6 @@ class DocumentScores(BaseModel):
     scores: dict[str, float]
 
 
-class RerankerScores(BaseModel):
+class QueryScores(BaseModel):
     query_id: str
     documents: list[DocumentScores]

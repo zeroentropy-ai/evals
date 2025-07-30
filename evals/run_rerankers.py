@@ -9,8 +9,8 @@ from tqdm import tqdm
 from evals.ai import AIRerankModel, ai_rerank, tiktoken_truncate_by_num_tokens
 from evals.common import (
     DocumentScores,
+    QueryScores,
     RerankerName,
-    RerankerScores,
     RetrievalMethod,
     ZEDataset,
     ZEResults,
@@ -81,7 +81,7 @@ async def rerank_dataset(
         if os.path.exists(latest_ze_results_path):
             with open(latest_ze_results_path) as f:
                 for line in f:
-                    reranker_data = RerankerScores.model_validate_json(line)
+                    reranker_data = QueryScores.model_validate_json(line)
                     processed_query_ids[reranker].add(reranker_data.query_id)
         else:
             os.makedirs(os.path.dirname(latest_ze_results_path), exist_ok=True)
@@ -126,7 +126,7 @@ async def rerank_dataset(
                     for reranker in need_rerank
                 ]
                 for reranker, results in zip(need_rerank, all_results, strict=False):
-                    reranker_scores: RerankerScores = RerankerScores(
+                    reranker_scores: QueryScores = QueryScores(
                         query_id=ze_results.query_id,
                         documents=[
                             DocumentScores(
@@ -158,7 +158,7 @@ async def rerank_dataset(
     pbar.close()
 
 
-async def main(
+async def run_rerankers(
     *,
     ingestors: list[BaseIngestor] = DEFAULT_INGESTORS,
     rerankers: list[RerankerName] = DEFAULT_RERANKERS,
@@ -177,4 +177,4 @@ async def main(
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    asyncio.run(run_rerankers())

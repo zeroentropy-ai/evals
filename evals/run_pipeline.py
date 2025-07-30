@@ -3,20 +3,20 @@ from typing import Literal
 
 from evals.common import RerankerName, RetrievalMethod
 from evals.ingestors.common import BaseIngestor
-from evals.run_embeddings import main as run_embeddings
-from evals.run_ingestors import main as run_ingestors
-from evals.run_ndcg import main as run_ndcg
-from evals.run_rerankers import main as run_rerankers
+from evals.run_embeddings import run_embeddings
+from evals.run_ingestors import run_ingestors
+from evals.run_ndcg import run_ndcg
+from evals.run_rerankers import run_rerankers
 from evals.types import OLD_INGESTORS
 
 INGESTORS: list[BaseIngestor] = OLD_INGESTORS
 RETRIEVAL_METHOD: RetrievalMethod = "openai_small"
 INCLUDE_RELEVANT_DOCS: bool = True
-RERANKERS: list[RerankerName] = ["zeroentropy-baseten"]
+RERANKERS: list[RerankerName] = ["zeroentropy-large"]
 MAX_QUERIES = 100
 
-ACTIONS = Literal["ingestors", "embeddings", "rerankers", "ndcg"]
-ORDER: dict[ACTIONS, int] = {
+Action = Literal["ingestors", "embeddings", "rerankers", "ndcg"]
+ORDER: dict[Action, int] = {
     "ingestors": 0,
     "embeddings": 1,
     "rerankers": 2,
@@ -24,9 +24,10 @@ ORDER: dict[ACTIONS, int] = {
 }
 
 
-async def main(
-    start_action: ACTIONS = "ingestors", end_action: ACTIONS = "ndcg"
+async def run_pipeline(
+    start_action: Action = "ingestors", end_action: Action = "ndcg"
 ) -> None:
+    # Run actions, but only between the requested start and end inclusive
     if (
         ORDER[start_action] <= ORDER["ingestors"]
         and ORDER[end_action] >= ORDER["ingestors"]
@@ -61,4 +62,4 @@ async def main(
 
 
 if __name__ == "__main__":
-    asyncio.run(main("rerankers", "ndcg"))
+    asyncio.run(run_pipeline("ingestors", "ndcg"))

@@ -1,10 +1,9 @@
 import math
 import os
-from collections import defaultdict
 
 from evals.common import (
+    QueryScores,
     RerankerName,
-    RerankerScores,
     RetrievalMethod,
     ZEDataset,
     ZEResults,
@@ -52,7 +51,7 @@ def analyze_ndcg(
         print("- Missing ZeResults")
         return
     total_lines = 0
-    ground_truth: dict[str, tuple[list[float], float]] = defaultdict(tuple)
+    ground_truth: dict[str, tuple[list[float], float]] = {}
     default_ndcgs: list[float] = []
     with open(ze_results_path) as f:
         for _line in f:
@@ -92,7 +91,7 @@ def analyze_ndcg(
         all_ndcgs: list[float] = []
         with open(latest_ze_results_path) as f:
             for line in f:
-                reranker_data = RerankerScores.model_validate_json(line)
+                reranker_data = QueryScores.model_validate_json(line)
                 if reranker_data.query_id not in ground_truth:
                     continue
                 human_scores, idcg = ground_truth[reranker_data.query_id]
@@ -117,7 +116,7 @@ def analyze_ndcg(
         )
 
 
-def main(
+def run_ndcg(
     *,
     ingestors: list[BaseIngestor] = DEFAULT_INGESTORS,
     retrieval_method: RetrievalMethod = DEFAULT_RETRIEVAL_METHOD,
@@ -131,4 +130,4 @@ def main(
 
 
 if __name__ == "__main__":
-    main()
+    run_ndcg()

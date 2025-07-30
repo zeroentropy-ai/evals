@@ -1,10 +1,34 @@
 import os
 
+from pydantic import BaseModel
+
 from evals.ingestors.common import BaseIngestor, clean_dataset, limit_queries
 from evals.types import DEFAULT_INGESTORS, DEFAULT_MAX_QUERIES
 
 
-def main(
+def write_jsonl[T: BaseModel](file_name: str, models: list[T]) -> None:
+    existing_lines: list[str] | None = None
+    if os.path.exists(file_name):
+        existing_lines = []
+        with open(file_name) as f:
+            for line in f:
+                existing_lines.append(line.strip())
+
+    output_lines: list[str] = []
+    for model in models:
+        model_string = model.model_dump_json()
+        output_lines.append(model_string.strip())
+
+    if output_lines == existing_lines:
+        print(f"=> {file_name} is identical. The file was not modified.")
+    else:
+        with open(file_name, "w") as f:
+            for line in output_lines:
+                f.write(line + "\n")
+        print(f"=> Wrote to {file_name}")
+
+
+def run_ingestors(
     *,
     ingestors: list[BaseIngestor] = DEFAULT_INGESTORS,
     max_queries: int = DEFAULT_MAX_QUERIES,
@@ -14,8 +38,7 @@ def main(
         print(f"===> Ingesting {dataset.id} (Dataset {i + 1}/{len(ingestors)}) <===")
 
         # Create dataset directory if it doesn't exist
-        dataset_dir = dataset.root_path
-        os.makedirs(dataset_dir, exist_ok=True)
+        os.makedirs(dataset.root_path, exist_ok=True)
 
         # Run Ingestion
         queries, documents, qrels = clean_dataset(*ingestor.ingest())
@@ -28,16 +51,10 @@ def main(
         )
 
         # Write the results
-        with open(f"{dataset_dir}/queries.jsonl", "w") as f:
-            for q in queries:
-                f.write(q.model_dump_json() + "\n")
-        with open(f"{dataset_dir}/documents.jsonl", "w") as f:
-            for d in documents:
-                f.write(d.model_dump_json() + "\n")
-        with open(f"{dataset_dir}/qrels.jsonl", "w") as f:
-            for qrel in qrels:
-                f.write(qrel.model_dump_json() + "\n")
+        write_jsonl(dataset.queries_path, queries)
+        write_jsonl(dataset.documents_path, documents)
+        write_jsonl(dataset.qrels_path, qrels)
 
 
 if __name__ == "__main__":
-    main()
+    run_ingestors()
