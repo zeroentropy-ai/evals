@@ -1,8 +1,23 @@
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import AliasChoices, BaseModel, Field, computed_field
 
 from evals.utils import ROOT
+
+RetrievalMethod = Literal["openai_small", "bm25", "hybrid"]
+MergeStatus = Literal["merged", "unmerged"]
+RerankerName = Literal[
+    "cohere",
+    "salesforce",
+    "zeroentropy-large",
+    "zeroentropy-small",
+    "zeroentropy-small-modal",
+    "zeroentropy-large-modal",
+    "zeroentropy-baseten",
+    "mixbread",
+    "jina",
+    "qwen",
+]
 
 
 class ZEDataset(BaseModel):
@@ -35,10 +50,28 @@ class ZEDataset(BaseModel):
     def qrels_path(self) -> str:
         return self.file_path("qrels.jsonl")
 
-    @computed_field
-    @property
-    def ze_results_path(self) -> str:
-        return self.file_path("ze_results.jsonl")
+    def ze_results_path(
+        self, retrieval_method: RetrievalMethod, include_relevant_docs: bool
+    ) -> str:
+        merge_status: MergeStatus = "merged" if include_relevant_docs else "unmerged"
+        return self.file_path(f"{retrieval_method}/{merge_status}/ze_results.jsonl")
+
+    def embeddings_cache_path(
+        self, retrieval_method: RetrievalMethod, include_relevant_docs: bool
+    ) -> str:
+        merge_status: MergeStatus = "merged" if include_relevant_docs else "unmerged"
+        return self.file_path(f"{retrieval_method}/{merge_status}/embeddings_cache.db")
+
+    def latest_ze_results_path(
+        self,
+        retrieval_method: RetrievalMethod,
+        include_relevant_docs: bool,
+        reranker: RerankerName,
+    ) -> str:
+        merge_status: MergeStatus = "merged" if include_relevant_docs else "unmerged"
+        return self.file_path(
+            f"{retrieval_method}/{merge_status}/{reranker}/latest_ze_results.jsonl"
+        )
 
 
 class Document(BaseModel):
@@ -72,3 +105,13 @@ class ZEResults(BaseModel):
     query_id: str
     query: str
     documents: list[Document]
+
+
+class DocumentScores(BaseModel):
+    document_id: str
+    scores: dict[str, float]
+
+
+class QueryScores(BaseModel):
+    query_id: str
+    documents: list[DocumentScores]

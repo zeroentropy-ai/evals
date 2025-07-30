@@ -27,8 +27,9 @@ def remove_empty_queries(
     documents: list[Document],
     qrels: list[QRel],
 ) -> tuple[list[Query], list[Document], list[QRel]]:
-    queries = [query for query in queries if query.query.strip()]
-    qrels = [qrel for qrel in qrels if qrel.query_id in [query.id for query in queries]]
+    queries = [query for query in queries if len(query.query.strip()) > 0]
+    query_ids = set(query.id for query in queries)
+    qrels = [qrel for qrel in qrels if qrel.query_id in query_ids]
     return (queries, documents, qrels)
 
 

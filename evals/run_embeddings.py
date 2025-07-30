@@ -2,7 +2,7 @@ import asyncio
 import random
 from collections import defaultdict
 from pathlib import Path
-from typing import Any, Literal, cast
+from typing import Any, cast
 
 import diskcache as dc  # pyright: ignore[reportMissingTypeStubs]
 import numpy as np
@@ -15,19 +15,17 @@ from evals.ai import (
     ai_embedding,
     tiktoken_truncate_by_num_tokens,
 )
-from evals.common import Document, QRel, Query, ZEDataset, ZEResults
-from evals.run_ingestors import EVAL_DATASETS
+from evals.common import Document, QRel, Query, RetrievalMethod, ZEDataset, ZEResults
+from evals.ingestors.common import BaseIngestor
+from evals.types import (
+    DEFAULT_INCLUDE_RELEVANT_DOCS,
+    DEFAULT_INGESTORS,
+    DEFAULT_RETRIEVAL_METHOD,
+)
 from evals.utils import ROOT
 
-DATASETS = EVAL_DATASETS
 USE_EMBEDDINGS_CACHE = True
 EMBEDDING_MAX_TOKENS = 8192
-
-# Configuration: Change this constant to select retrieval method
-RETRIEVAL_METHOD: Literal["openai_small", "bm25", "hybrid"] = "bm25"
-INCLUDE_RELEVANT_DOCS = False
-MERGE_STATUS = "merged_" if INCLUDE_RELEVANT_DOCS else ""
-SAVE_NAME = f"{RETRIEVAL_METHOD}_{MERGE_STATUS}ze_results.jsonl"
 
 type nparr = np.ndarray[Any, Any]
 
@@ -212,6 +210,8 @@ async def get_hybrid_embeddings(
 
 async def generate_embeddings(
     dataset: ZEDataset,
+    retrieval_method: RetrievalMethod,
+    include_relevant_docs: bool,
     *,
     k: int = 100,
     embedding_model: AIEmbeddingModel | None = None,
@@ -247,30 +247,32 @@ async def generate_embeddings(
     # Calculate similarity scores using selected retrieval method
     embeddings_cache = (
         dc.Cache(
-            dataset.file_path(f"{MERGE_STATUS}embeddings_cache.db"),
+            dataset.embeddings_cache_path(retrieval_method, include_relevant_docs),
             eviction_policy="none",
         )
         if USE_EMBEDDINGS_CACHE
         else None
     )
 
-    print(f"Using retrieval method: {RETRIEVAL_METHOD}")
+    print(f"Using retrieval method: {retrieval_method}")
 
-    if RETRIEVAL_METHOD == "openai_small":
+    if retrieval_method == "openai_small":
         top_sorted_indices, similarity_scores = await get_openai_small_embeddings(
             queries, documents, k, embeddings_cache
         )
-    elif RETRIEVAL_METHOD == "bm25":
+    elif retrieval_method == "bm25":
         top_sorted_indices, similarity_scores = get_bm25_embeddings(
             queries, documents, k
         )
-    elif RETRIEVAL_METHOD == "hybrid":
+    elif retrieval_method == "hybrid":
         top_sorted_indices, similarity_scores = await get_hybrid_embeddings(
             queries, documents, k, embeddings_cache
         )
 
     # Save all necessary data
-    with open(dataset.file_path(SAVE_NAME), "w") as f:
+    with open(
+        dataset.ze_results_path(retrieval_method, include_relevant_docs), "w"
+    ) as f:
         queries_processed = 0
         queries_skipped = 0
 
@@ -285,7 +287,7 @@ async def generate_embeddings(
             if hasattr(query_similarity_scores, "tolist"):
                 query_similarity_scores = query_similarity_scores.tolist()
 
-            if INCLUDE_RELEVANT_DOCS:
+            if include_relevant_docs:
                 # Force include all relevant documents
                 if len(qrel_indices) > k:
                     # If more relevant docs than k, take only first k relevant docs
@@ -338,7 +340,7 @@ async def generate_embeddings(
             documents_top: list[Document] = []
             for i, index in enumerate(query_top_sorted_indices):
                 scores = {
-                    f"{RETRIEVAL_METHOD}": float(query_similarity_scores[i]),
+                    f"{retrieval_method}": float(query_similarity_scores[i]),
                 }
                 qrel = query_and_document_id_to_qrel.get(
                     (query.id, documents[index].id), None
@@ -361,7 +363,9 @@ async def generate_embeddings(
             f.write(ze_results.model_dump_json() + "\n")
             queries_processed += 1
 
-    print(f"Data saved to {Path(dataset.ze_results_path).relative_to(ROOT)}")
+    print(
+        f"Data saved to {Path(dataset.ze_results_path(retrieval_method, include_relevant_docs)).relative_to(ROOT)}"
+    )
     print(f"Processed {queries_processed} queries")
     if queries_skipped > 0:
         print(
@@ -369,11 +373,17 @@ async def generate_embeddings(
         )
 
 
-async def main() -> None:
-    for i, dataset in enumerate(DATASETS):
-        print(f"===> Embedding {dataset.id} (Dataset {i + 1}/{len(DATASETS)}) <===")
-        await generate_embeddings(dataset)
+async def run_embeddings(
+    *,
+    ingestors: list[BaseIngestor] = DEFAULT_INGESTORS,
+    retrieval_method: RetrievalMethod = DEFAULT_RETRIEVAL_METHOD,
+    include_relevant_docs: bool = DEFAULT_INCLUDE_RELEVANT_DOCS,
+) -> None:
+    datasets = [ingestor.dataset() for ingestor in ingestors]
+    for i, dataset in enumerate(datasets):
+        print(f"===> Embedding {dataset.id} (Dataset {i + 1}/{len(datasets)}) <===")
+        await generate_embeddings(dataset, retrieval_method, include_relevant_docs)
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    asyncio.run(run_embeddings())
