@@ -6,7 +6,12 @@ from typing import TextIO
 
 from tqdm import tqdm
 
-from evals.ai import AIRerankModel, ai_rerank, tiktoken_truncate_by_num_tokens
+from evals.ai import (
+    AIEmbeddingModel,
+    AIRerankModel,
+    ai_rerank,
+    tiktoken_truncate_by_num_tokens,
+)
 from evals.common import (
     DocumentScores,
     QueryScores,
@@ -35,7 +40,7 @@ company_to_max_batch_characters = {
 
 
 async def process_query(
-    reranker: AIRerankModel,
+    reranker: AIRerankModel | AIEmbeddingModel,
     query: str,
     documents: list[str],
 ) -> list[float]:

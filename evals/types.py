@@ -1,4 +1,4 @@
-from evals.ai import AIRerankModel
+from evals.ai import AIEmbeddingModel, AIRerankModel
 from evals.common import RerankerName, RetrievalMethod
 from evals.ingestors.bioasq import BioasqIngestor
 from evals.ingestors.common import BaseIngestor
@@ -21,7 +21,7 @@ from evals.ingestors.quora import QuoraIngestor
 from evals.ingestors.quora_swedish import QuoraSwedishIngestor
 from evals.ingestors.stackoverflowqa import StackoverflowqaIngestor
 
-ALL_RERANKERS: dict[RerankerName, AIRerankModel] = {
+ALL_RERANKERS: dict[RerankerName, AIRerankModel | AIEmbeddingModel] = {
     "cohere": AIRerankModel(company="cohere", model="rerank-v3.5"),
     "salesforce": AIRerankModel(company="together", model="Salesforce/Llama-Rank-V1"),
     "zeroentropy-large": AIRerankModel(company="zeroentropy", model="zerank-1"),
@@ -45,6 +45,10 @@ ALL_RERANKERS: dict[RerankerName, AIRerankModel] = {
     "qwen": AIRerankModel(
         company="modal",
         model="https://zeroentropy--qwen3-reranker-4b-model-endpoint.modal.run/",
+    ),
+    "openai-large-embedding": AIEmbeddingModel(
+        company="openai",
+        model="text-embedding-3-large",
     ),
 }
 

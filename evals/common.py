@@ -17,6 +17,7 @@ RerankerName = Literal[
     "mixbread",
     "jina",
     "qwen",
+    "openai-large-embedding",
 ]
 
 

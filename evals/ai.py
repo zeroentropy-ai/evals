@@ -1130,9 +1130,41 @@ def get_rerank_cache_key(model: AIRerankModel, query: str, text: str) -> str:
     return texts_hash
 
 
+async def ai_rerank_by_embedding(
+    model: AIEmbeddingModel,
+    query: str,
+    texts: list[str],
+    *,
+    # Throw an AITimeoutError after this many retries fail
+    num_ratelimit_retries: int = 10,
+) -> list[float]:
+    # Get embeddings for query and documents
+    query_embedding = await ai_embedding(
+        model,
+        [query],
+        AIEmbeddingType.QUERY,
+        num_ratelimit_retries=num_ratelimit_retries,
+    )
+
+    document_embeddings = await ai_embedding(
+        model,
+        texts,
+        AIEmbeddingType.DOCUMENT,
+        num_ratelimit_retries=num_ratelimit_retries,
+    )
+
+    # Calculate cosine similarities (dot products since embeddings are normalized)
+    similarities = [
+        cosine_similarity(query_embedding[0], doc_embedding)
+        for doc_embedding in document_embeddings
+    ]
+
+    return similarities
+
+
 # Gets the list of indices that reranks the original texts
 async def ai_rerank(
-    model: AIRerankModel,
+    model: AIRerankModel | AIEmbeddingModel,
     query: str,
     texts: list[str],
     *,
@@ -1142,6 +1174,14 @@ async def ai_rerank(
     # Backoff function (Receives index of attempt)
     backoff_algo: Callable[[int], float] = lambda i: min(2**i, 5),
 ) -> list[float]:
+    if isinstance(model, AIEmbeddingModel):
+        assert top_k is None, "top_k is not supported for AIEmbeddingModel"
+        return await ai_rerank_by_embedding(
+            model,
+            query,
+            texts,
+            num_ratelimit_retries=num_ratelimit_retries,
+        )
     text_scores: list[float | None] = [None] * len(texts)
     if g_cache is not None:
         for i, text in enumerate(texts):
