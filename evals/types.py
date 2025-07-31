@@ -52,7 +52,7 @@ ALL_RERANKERS: dict[RerankerName, AIRerankModel | AIEmbeddingModel] = {
     ),
 }
 
-OLD_INGESTORS: list[BaseIngestor] = [
+ORIGINAL_INGESTORS: list[BaseIngestor] = [
     FiqaIngestor(),
     BioasqIngestor(),
     StackoverflowqaIngestor(),
@@ -212,8 +212,8 @@ MTEB_INGESTORS: list[BaseIngestor] = [
         split="test",
     ),
 ]
-ALL_INGESTORS = MTEB_INGESTORS + NEW_INGESTORS + OLD_INGESTORS
-DEFAULT_INGESTORS = MTEB_INGESTORS + NEW_INGESTORS + OLD_INGESTORS
+ALL_INGESTORS = MTEB_INGESTORS + NEW_INGESTORS + ORIGINAL_INGESTORS
+DEFAULT_INGESTORS = ORIGINAL_INGESTORS
 DEFAULT_MAX_QUERIES = 1000
 DEFAULT_RETRIEVAL_METHOD: RetrievalMethod = "openai_small"
 DEFAULT_INCLUDE_RELEVANT_DOCS: bool = True

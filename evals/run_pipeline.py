@@ -7,9 +7,9 @@ from evals.run_embeddings import run_embeddings
 from evals.run_ingestors import run_ingestors
 from evals.run_ndcg import run_ndcg
 from evals.run_rerankers import run_rerankers
-from evals.types import OLD_INGESTORS
+from evals.types import DEFAULT_INGESTORS
 
-INGESTORS: list[BaseIngestor] = OLD_INGESTORS
+INGESTORS: list[BaseIngestor] = DEFAULT_INGESTORS
 RETRIEVAL_METHOD: RetrievalMethod = "openai_small"
 INCLUDE_RELEVANT_DOCS: bool = True
 RERANKERS: list[RerankerName] = ["zeroentropy-large"]
