@@ -72,6 +72,8 @@ def limit_queries(
     return (queries, documents, qrels)
 
 
+# The input could be invalid (duplicate pkeys, a qrel fkey that doesn't exist).
+# This fixes that
 def validate_dataset(
     queries: list[Query],
     documents: list[Document],
@@ -228,14 +230,24 @@ def clean_dataset(
     documents: list[Document],
     qrels: list[QRel],
 ) -> tuple[list[Query], list[Document], list[QRel]]:
-    queries, documents, qrels = validate_dataset(
-        queries, documents, qrels
-    )  # some datasets accidently put invalid qrels for some reason
+    # Validate no duplicate IDs, and remove invalid qrels
+    queries, documents, qrels = validate_dataset(queries, documents, qrels)
 
-    return chunk_long_strings(
+    with open("queries.jsonl", "w") as f:
+        for q in queries:
+            f.write(q.model_dump_json() + "\n")
+    with open("qrels.jsonl", "w") as f:
+        for q in qrels:
+            f.write(q.model_dump_json() + "\n")
+
+    # Clean the string content
+    queries, documents, qrels = chunk_long_strings(
         *remove_nonpositive_queries(
             *remove_duplicates(
                 *remove_empty_queries(queries, documents, qrels),
             )
         )
     )
+    assert len(queries) > 0 and len(qrels) > 0
+
+    return queries, documents, qrels

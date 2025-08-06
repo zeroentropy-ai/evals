@@ -5,6 +5,7 @@ import json
 import math
 import os
 import time
+from collections import defaultdict
 from collections.abc import Callable, Coroutine
 from enum import Enum
 from pathlib import Path
@@ -132,8 +133,16 @@ class AIMessage(BaseModel):
     content: str
 
 
+def decode_embedding(embedding: str) -> AIEmbedding:
+    return np.frombuffer(base64.b64decode(embedding), dtype="float16").astype(
+        np.float32
+    )
+
+
 class AIEmbeddingModel(BaseModel):
-    company: Literal["openai", "together", "cohere", "voyageai", "jina", "huggingface"]
+    company: Literal[
+        "openai", "together", "cohere", "voyageai", "jina", "huggingface", "modal"
+    ]
     model: str
 
     @computed_field
@@ -162,6 +171,8 @@ class AIEmbeddingModel(BaseModel):
                 pass
             case "huggingface":
                 pass
+            case "modal":
+                pass
         raise NotImplementedError("Unknown Dimensions")
 
     @computed_field
@@ -181,6 +192,8 @@ class AIEmbeddingModel(BaseModel):
                 return 500_000
             case "huggingface":
                 return 1_000_000
+            case "modal":
+                return 100_000_000
 
     @computed_field
     @property
@@ -199,6 +212,8 @@ class AIEmbeddingModel(BaseModel):
                 return 50
             case "huggingface":
                 return 1_000
+            case "modal":
+                return 10_000
 
     @computed_field
     @property
@@ -216,6 +231,8 @@ class AIEmbeddingModel(BaseModel):
                 return 128
             case "huggingface":
                 return 1024
+            case "modal":
+                return 1024
 
     @computed_field
     @property
@@ -229,13 +246,15 @@ class AIEmbeddingModel(BaseModel):
                 return 50_000
             case "huggingface":
                 return 1_000_000
+            case "modal":
+                return 1_000_000
             case _:
                 return 100_000
 
 
-class AIEmbeddingType(Enum):
-    DOCUMENT = 1
-    QUERY = 2
+class AIEmbeddingType(str, Enum):
+    DOCUMENT = "document"
+    QUERY = "query"
 
 
 class AIRerankModel(BaseModel):
@@ -317,7 +336,7 @@ class AIConnection:
     baseten_client: httpx.AsyncClient
     baseten_semaphore: asyncio.Semaphore
     modal_client: httpx.AsyncClient
-    modal_semaphore: asyncio.Semaphore
+    modal_semaphores: dict[str, asyncio.Semaphore]
     # Mapping from (company, model) to RateLimiter
     rate_limiters: dict[str, RateLimiter | RateLimiterWithRedis]
     backoff_semaphores: dict[str, asyncio.Semaphore]
@@ -360,7 +379,7 @@ class AIConnection:
         self.baseten_client = httpx.AsyncClient(http2=True)
         self.baseten_semaphore = asyncio.Semaphore(100)
         self.modal_client = httpx.AsyncClient(http2=True)
-        self.modal_semaphore = asyncio.Semaphore(250)
+        self.modal_semaphores = defaultdict(lambda: asyncio.Semaphore(250))
         self.huggingface_client = ({}, {})
 
         self.rate_limiters = {}
@@ -1092,6 +1111,47 @@ async def ai_embedding(
                     normalize_embeddings=True,
                 )
             ]
+        case "modal":
+            task_id = uuid4()
+            for _retry in range(num_ratelimit_retries):
+                try:
+                    async with get_ai_connection().modal_semaphores[
+                        f"embed:{model.model}"
+                    ]:
+                        payload = {
+                            "input": input_texts,
+                            "embedding_type": "query"
+                            if embedding_type == AIEmbeddingType.QUERY
+                            else "document",
+                        }
+                        response = await get_ai_connection().modal_client.post(
+                            url=model.model,
+                            headers={
+                                "Modal-Key": os.environ["MODAL_KEY"],
+                                "Modal-Secret": os.environ["MODAL_SECRET"],
+                            },
+                            json=payload,
+                            timeout=180,
+                        )
+                        response.raise_for_status()
+                        result = response.json()
+                        text_embeddings_response = [
+                            decode_embedding(str(embedding))
+                            for embedding in result["embeddings"]
+                        ]
+                        assert len(text_embeddings_response) == len(input_texts)
+                        break
+                except (
+                    httpx.ConnectError,
+                    httpx.RemoteProtocolError,
+                    httpx.ReadError,
+                    httpx.ReadTimeout,
+                    httpx.ConnectTimeout,
+                    httpx.HTTPStatusError,
+                ) as e:
+                    logger.warning(f"Modal Error: {e}")
+            if text_embeddings_response is None:
+                raise AITimeoutError("Cannot overcome Modal RateLimitError")
 
     # Update cache
     if cache is not None:
@@ -1394,7 +1454,9 @@ async def ai_rerank(
                     await get_ai_connection().ai_wait_ratelimit(
                         model, num_tokens_input, backoff_algo(i - 1) if i > 0 else None
                     )
-                    async with get_ai_connection().modal_semaphore:
+                    async with get_ai_connection().modal_semaphores[
+                        f"rerank:{model.model}"
+                    ]:
                         query_documents = [
                             (query, document) for document in unprocessed_texts
                         ]

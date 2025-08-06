@@ -10,6 +10,7 @@ from evals.ingestors.fiqa import FiqaIngestor
 from evals.ingestors.ineqs import IneqsIngestor
 from evals.ingestors.leetcode_multi import LeetcodeMultiLanguageIngestor
 from evals.ingestors.master_legal_ingestion import MasterLegalIngestor
+from evals.ingestors.master_mt_rag_ingestor import MasterMtRagIngestor
 from evals.ingestors.master_mteb_ingestion import MasterMtebIngestor
 from evals.ingestors.mbpp import MbppIngestor
 from evals.ingestors.meeting import MeetingIngestor
@@ -38,7 +39,7 @@ ALL_RERANKERS: dict[RerankerName, AIRerankModel | AIEmbeddingModel] = {
         company="baseten",
         model="https://model-4w5l09vq.api.baseten.co/environments/production/async_predict",
     ),
-    "mixbread": AIRerankModel(
+    "mixedbread": AIRerankModel(
         company="huggingface", model="mixedbread-ai/mxbai-rerank-large-v1"
     ),
     "jina": AIRerankModel(company="jina", model="jina-reranker-m0"),
@@ -212,13 +213,27 @@ MTEB_INGESTORS: list[BaseIngestor] = [
         split="test",
     ),
 ]
-ALL_INGESTORS = MTEB_INGESTORS + NEW_INGESTORS + ORIGINAL_INGESTORS
-DEFAULT_INGESTORS = ORIGINAL_INGESTORS
-DEFAULT_MAX_QUERIES = 1000
+ALL_INGESTORS: list[BaseIngestor] = MTEB_INGESTORS + NEW_INGESTORS + ORIGINAL_INGESTORS
+DEFAULT_INGESTORS: list[BaseIngestor] = ORIGINAL_INGESTORS
+DEFAULT_MAX_QUERIES: int = 100
 DEFAULT_RETRIEVAL_METHOD: RetrievalMethod = "openai_small"
 DEFAULT_INCLUDE_RELEVANT_DOCS: bool = True
 DEFAULT_RERANKERS: list[RerankerName] = [
     "zeroentropy-small",
     "zeroentropy-large",
-    "zeroentropy-baseten",
 ]
+
+DEFAULT_INGESTORS = [
+    MasterMtRagIngestor("clapnq"),
+    MasterMtRagIngestor("cloud"),
+    MasterMtRagIngestor("fiqa"),
+    MasterMtRagIngestor("govt"),
+]
+DEFAULT_RETRIEVAL_METHOD = "qwen3_4b"
+DEFAULT_INCLUDE_RELEVANT_DOCS = False
+DEFAULT_RERANKERS = [
+    "zeroentropy-large-modal",
+    "cohere",
+    # "qwen",
+]
+DEFAULT_MAX_QUERIES = 1000

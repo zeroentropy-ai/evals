@@ -4,7 +4,7 @@ from pydantic import AliasChoices, BaseModel, Field, computed_field
 
 from evals.utils import ROOT
 
-RetrievalMethod = Literal["openai_small", "bm25", "hybrid"]
+RetrievalMethod = Literal["qwen3_4b", "openai_small", "bm25", "hybrid"]
 MergeStatus = Literal["merged", "unmerged"]
 RerankerName = Literal[
     "cohere",
@@ -14,7 +14,7 @@ RerankerName = Literal[
     "zeroentropy-small-modal",
     "zeroentropy-large-modal",
     "zeroentropy-baseten",
-    "mixbread",
+    "mixedbread",
     "jina",
     "qwen",
     "openai-large-embedding",
