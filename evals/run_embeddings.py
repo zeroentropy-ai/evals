@@ -358,10 +358,10 @@ async def generate_embeddings(
                     i for i in query_top_sorted_indices if i in qrel_indices
                 ]
 
-                if not relevant_in_top_k:
-                    # Skip this query as it has no relevant documents in top k
-                    queries_skipped += 1
-                    continue
+                # if not relevant_in_top_k:
+                #     # Skip this query as it has no relevant documents in top k
+                #     queries_skipped += 1
+                #     continue
 
             documents_top: list[Document] = []
             for i, index in enumerate(query_top_sorted_indices):

@@ -124,12 +124,22 @@ async def rerank_dataset(
                     tiktoken_truncate_by_num_tokens(document.content, RERANK_MAX_TOKENS)
                     for document in ze_results.documents
                 ]
-                all_results: list[list[float]] = [
-                    await process_query(
-                        ALL_RERANKERS[reranker], query_text, document_texts
-                    )
-                    for reranker in need_rerank
-                ]
+                ground_truth_exists = any(
+                    document.scores.get("human", 0) > 0
+                    for document in ze_results.documents
+                )
+                if ground_truth_exists:
+                    all_results: list[list[float]] = [
+                        await process_query(
+                            ALL_RERANKERS[reranker], query_text, document_texts
+                        )
+                        for reranker in need_rerank
+                    ]
+                else:
+                    all_results = [
+                        [-1 for _document_text in document_texts]
+                        for _reranker in need_rerank
+                    ]
                 for reranker, results in zip(need_rerank, all_results, strict=False):
                     reranker_scores: QueryScores = QueryScores(
                         query_id=ze_results.query_id,
