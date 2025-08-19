@@ -264,6 +264,17 @@ async def generate_embeddings(
     print(f"Using retrieval method: {retrieval_method}")
 
     match retrieval_method:
+        case "qwen3_0.6b":
+            top_sorted_indices, similarity_scores = await get_embeddings(
+                AIEmbeddingModel(
+                    company="modal",
+                    model="https://zeroentropy--qwen3-embedding-0-6b-dev-model-endpoint.modal.run/",
+                ),
+                queries,
+                documents,
+                k,
+                embeddings_cache,
+            )
         case "qwen3_4b":
             top_sorted_indices, similarity_scores = await get_embeddings(
                 AIEmbeddingModel(
