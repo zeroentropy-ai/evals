@@ -325,7 +325,7 @@ async def generate_embeddings(
                 query_similarity_scores = query_similarity_scores.tolist()
 
             if include_relevant_docs:
-                # Force include all relevant documents
+                # Force include (merge) all relevant documents
                 if len(qrel_indices) > k:
                     # If more relevant docs than k, take only first k relevant docs
                     final_indices = qrel_indices[:k]
@@ -362,17 +362,6 @@ async def generate_embeddings(
                 )
                 query_top_sorted_indices = [idx for idx, _ in sorted_pairs]
                 query_similarity_scores = [score for _, score in sorted_pairs]
-
-            else:
-                # Natural top-k only, skip queries with no relevant docs
-                relevant_in_top_k = [
-                    i for i in query_top_sorted_indices if i in qrel_indices
-                ]
-
-                # if not relevant_in_top_k:
-                #     # Skip this query as it has no relevant documents in top k
-                #     queries_skipped += 1
-                #     continue
 
             documents_top: list[Document] = []
             for i, index in enumerate(query_top_sorted_indices):

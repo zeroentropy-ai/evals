@@ -233,13 +233,6 @@ def clean_dataset(
     # Validate no duplicate IDs, and remove invalid qrels
     queries, documents, qrels = validate_dataset(queries, documents, qrels)
 
-    with open("queries.jsonl", "w") as f:
-        for q in queries:
-            f.write(q.model_dump_json() + "\n")
-    with open("qrels.jsonl", "w") as f:
-        for q in qrels:
-            f.write(q.model_dump_json() + "\n")
-
     # Clean the string content
     queries, documents, qrels = chunk_long_strings(
         *remove_nonpositive_queries(

@@ -136,6 +136,7 @@ async def rerank_dataset(
                         for reranker in need_rerank
                     ]
                 else:
+                    # NOTE: Skip reranker calls when there's no ground truth in the top
                     all_results = [
                         [-1 for _document_text in document_texts]
                         for _reranker in need_rerank

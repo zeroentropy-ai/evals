@@ -10,7 +10,6 @@ from evals.ingestors.fiqa import FiqaIngestor
 from evals.ingestors.ineqs import IneqsIngestor
 from evals.ingestors.leetcode_multi import LeetcodeMultiLanguageIngestor
 from evals.ingestors.master_legal_ingestion import MasterLegalIngestor
-from evals.ingestors.master_mt_rag_ingestor import MasterMtRagIngestor
 from evals.ingestors.master_mteb_ingestion import MasterMtebIngestor
 from evals.ingestors.mbpp import MbppIngestor
 from evals.ingestors.meeting import MeetingIngestor
@@ -222,18 +221,3 @@ DEFAULT_RERANKERS: list[RerankerName] = [
     "zeroentropy-small",
     "zeroentropy-large",
 ]
-
-DEFAULT_INGESTORS = [
-    MasterMtRagIngestor("clapnq"),
-    MasterMtRagIngestor("cloud"),
-    MasterMtRagIngestor("fiqa"),
-    MasterMtRagIngestor("govt"),
-]
-DEFAULT_RETRIEVAL_METHOD = "qwen3_4b"
-DEFAULT_INCLUDE_RELEVANT_DOCS = False
-DEFAULT_RERANKERS = [
-    "zeroentropy-large-modal",
-    "cohere",
-    # "qwen",
-]
-DEFAULT_MAX_QUERIES = 1000
