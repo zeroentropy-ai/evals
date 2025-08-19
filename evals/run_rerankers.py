@@ -6,7 +6,12 @@ from typing import TextIO
 
 from tqdm import tqdm
 
-from evals.ai import AIRerankModel, ai_rerank, tiktoken_truncate_by_num_tokens
+from evals.ai import (
+    AIEmbeddingModel,
+    AIRerankModel,
+    ai_rerank,
+    tiktoken_truncate_by_num_tokens,
+)
 from evals.common import (
     DocumentScores,
     QueryScores,
@@ -35,7 +40,7 @@ company_to_max_batch_characters = {
 
 
 async def process_query(
-    reranker: AIRerankModel,
+    reranker: AIRerankModel | AIEmbeddingModel,
     query: str,
     documents: list[str],
 ) -> list[float]:
@@ -119,12 +124,23 @@ async def rerank_dataset(
                     tiktoken_truncate_by_num_tokens(document.content, RERANK_MAX_TOKENS)
                     for document in ze_results.documents
                 ]
-                all_results: list[list[float]] = [
-                    await process_query(
-                        ALL_RERANKERS[reranker], query_text, document_texts
-                    )
-                    for reranker in need_rerank
-                ]
+                ground_truth_exists = any(
+                    document.scores.get("human", 0) > 0
+                    for document in ze_results.documents
+                )
+                if ground_truth_exists:
+                    all_results: list[list[float]] = [
+                        await process_query(
+                            ALL_RERANKERS[reranker], query_text, document_texts
+                        )
+                        for reranker in need_rerank
+                    ]
+                else:
+                    # NOTE: Skip reranker calls when there's no ground truth in the top
+                    all_results = [
+                        [-1 for _document_text in document_texts]
+                        for _reranker in need_rerank
+                    ]
                 for reranker, results in zip(need_rerank, all_results, strict=False):
                     reranker_scores: QueryScores = QueryScores(
                         query_id=ze_results.query_id,

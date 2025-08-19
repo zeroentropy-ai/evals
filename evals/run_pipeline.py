@@ -7,13 +7,19 @@ from evals.run_embeddings import run_embeddings
 from evals.run_ingestors import run_ingestors
 from evals.run_ndcg import run_ndcg
 from evals.run_rerankers import run_rerankers
-from evals.types import OLD_INGESTORS
+from evals.types import (
+    DEFAULT_INCLUDE_RELEVANT_DOCS,
+    DEFAULT_INGESTORS,
+    DEFAULT_MAX_QUERIES,
+    DEFAULT_RERANKERS,
+    DEFAULT_RETRIEVAL_METHOD,
+)
 
-INGESTORS: list[BaseIngestor] = OLD_INGESTORS
-RETRIEVAL_METHOD: RetrievalMethod = "openai_small"
-INCLUDE_RELEVANT_DOCS: bool = True
-RERANKERS: list[RerankerName] = ["zeroentropy-large"]
-MAX_QUERIES = 100
+INGESTORS: list[BaseIngestor] = DEFAULT_INGESTORS
+RETRIEVAL_METHOD: RetrievalMethod = DEFAULT_RETRIEVAL_METHOD
+INCLUDE_RELEVANT_DOCS: bool = DEFAULT_INCLUDE_RELEVANT_DOCS
+RERANKERS: list[RerankerName] = DEFAULT_RERANKERS
+MAX_QUERIES = DEFAULT_MAX_QUERIES
 
 Action = Literal["ingestors", "embeddings", "rerankers", "ndcg"]
 ORDER: dict[Action, int] = {

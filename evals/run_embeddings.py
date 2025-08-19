@@ -30,14 +30,14 @@ EMBEDDING_MAX_TOKENS = 8192
 type nparr = np.ndarray[Any, Any]
 
 
-async def get_openai_small_embeddings(
+async def get_embeddings(
+    embedding_model: AIEmbeddingModel,
     queries: list[Query],
     documents: list[Document],
     k: int,
     embeddings_cache: dc.Cache | None = None,
 ) -> tuple[nparr, nparr]:
     """Calculate OpenAI embedding similarity scores between queries and documents."""
-    embedding_model = AIEmbeddingModel(company="openai", model="text-embedding-3-small")
     # Calculate query embeddings
     pbar = tqdm(
         desc="Query Embeddings",
@@ -159,8 +159,15 @@ async def get_hybrid_embeddings(
     k: int,
     embeddings_cache: dc.Cache | None = None,
 ) -> tuple[nparr, nparr]:
-    embedding_indices, embedding_scores = await get_openai_small_embeddings(
-        queries, documents, 3 * k, embeddings_cache
+    embedding_indices, embedding_scores = await get_embeddings(
+        AIEmbeddingModel(
+            company="openai",
+            model="text-embedding-3-small",
+        ),
+        queries,
+        documents,
+        3 * k,
+        embeddings_cache,
     )
 
     bm25_indices, bm25_scores = get_bm25_embeddings(queries, documents, 3 * k)
@@ -256,18 +263,48 @@ async def generate_embeddings(
 
     print(f"Using retrieval method: {retrieval_method}")
 
-    if retrieval_method == "openai_small":
-        top_sorted_indices, similarity_scores = await get_openai_small_embeddings(
-            queries, documents, k, embeddings_cache
-        )
-    elif retrieval_method == "bm25":
-        top_sorted_indices, similarity_scores = get_bm25_embeddings(
-            queries, documents, k
-        )
-    elif retrieval_method == "hybrid":
-        top_sorted_indices, similarity_scores = await get_hybrid_embeddings(
-            queries, documents, k, embeddings_cache
-        )
+    match retrieval_method:
+        case "qwen3_0.6b":
+            top_sorted_indices, similarity_scores = await get_embeddings(
+                AIEmbeddingModel(
+                    company="modal",
+                    model="https://zeroentropy--qwen3-embedding-0-6b-dev-model-endpoint.modal.run/",
+                ),
+                queries,
+                documents,
+                k,
+                embeddings_cache,
+            )
+        case "qwen3_4b":
+            top_sorted_indices, similarity_scores = await get_embeddings(
+                AIEmbeddingModel(
+                    company="modal",
+                    model="https://zeroentropy--qwen3-embedding-4b-dev-model-endpoint.modal.run/",
+                ),
+                queries,
+                documents,
+                k,
+                embeddings_cache,
+            )
+        case "openai_small":
+            top_sorted_indices, similarity_scores = await get_embeddings(
+                AIEmbeddingModel(
+                    company="openai",
+                    model="text-embedding-3-small",
+                ),
+                queries,
+                documents,
+                k,
+                embeddings_cache,
+            )
+        case "bm25":
+            top_sorted_indices, similarity_scores = get_bm25_embeddings(
+                queries, documents, k
+            )
+        case "hybrid":
+            top_sorted_indices, similarity_scores = await get_hybrid_embeddings(
+                queries, documents, k, embeddings_cache
+            )
 
     # Save all necessary data
     with open(
@@ -288,7 +325,7 @@ async def generate_embeddings(
                 query_similarity_scores = query_similarity_scores.tolist()
 
             if include_relevant_docs:
-                # Force include all relevant documents
+                # Force include (merge) all relevant documents
                 if len(qrel_indices) > k:
                     # If more relevant docs than k, take only first k relevant docs
                     final_indices = qrel_indices[:k]
@@ -325,17 +362,6 @@ async def generate_embeddings(
                 )
                 query_top_sorted_indices = [idx for idx, _ in sorted_pairs]
                 query_similarity_scores = [score for _, score in sorted_pairs]
-
-            else:
-                # Natural top-k only, skip queries with no relevant docs
-                relevant_in_top_k = [
-                    i for i in query_top_sorted_indices if i in qrel_indices
-                ]
-
-                if not relevant_in_top_k:
-                    # Skip this query as it has no relevant documents in top k
-                    queries_skipped += 1
-                    continue
 
             documents_top: list[Document] = []
             for i, index in enumerate(query_top_sorted_indices):

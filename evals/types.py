@@ -1,4 +1,4 @@
-from evals.ai import AIRerankModel
+from evals.ai import AIEmbeddingModel, AIRerankModel
 from evals.common import RerankerName, RetrievalMethod
 from evals.ingestors.bioasq import BioasqIngestor
 from evals.ingestors.common import BaseIngestor
@@ -21,7 +21,7 @@ from evals.ingestors.quora import QuoraIngestor
 from evals.ingestors.quora_swedish import QuoraSwedishIngestor
 from evals.ingestors.stackoverflowqa import StackoverflowqaIngestor
 
-ALL_RERANKERS: dict[RerankerName, AIRerankModel] = {
+ALL_RERANKERS: dict[RerankerName, AIRerankModel | AIEmbeddingModel] = {
     "cohere": AIRerankModel(company="cohere", model="rerank-v3.5"),
     "salesforce": AIRerankModel(company="together", model="Salesforce/Llama-Rank-V1"),
     "zeroentropy-large": AIRerankModel(company="zeroentropy", model="zerank-1"),
@@ -38,7 +38,7 @@ ALL_RERANKERS: dict[RerankerName, AIRerankModel] = {
         company="baseten",
         model="https://model-4w5l09vq.api.baseten.co/environments/production/async_predict",
     ),
-    "mixbread": AIRerankModel(
+    "mixedbread": AIRerankModel(
         company="huggingface", model="mixedbread-ai/mxbai-rerank-large-v1"
     ),
     "jina": AIRerankModel(company="jina", model="jina-reranker-m0"),
@@ -46,9 +46,13 @@ ALL_RERANKERS: dict[RerankerName, AIRerankModel] = {
         company="modal",
         model="https://zeroentropy--qwen3-reranker-4b-model-endpoint.modal.run/",
     ),
+    "openai-large-embedding": AIEmbeddingModel(
+        company="openai",
+        model="text-embedding-3-large",
+    ),
 }
 
-OLD_INGESTORS: list[BaseIngestor] = [
+ORIGINAL_INGESTORS: list[BaseIngestor] = [
     FiqaIngestor(),
     BioasqIngestor(),
     StackoverflowqaIngestor(),
@@ -208,13 +212,12 @@ MTEB_INGESTORS: list[BaseIngestor] = [
         split="test",
     ),
 ]
-ALL_INGESTORS = MTEB_INGESTORS + NEW_INGESTORS + OLD_INGESTORS
-DEFAULT_INGESTORS = MTEB_INGESTORS + NEW_INGESTORS + OLD_INGESTORS
-DEFAULT_MAX_QUERIES = 1000
+ALL_INGESTORS: list[BaseIngestor] = MTEB_INGESTORS + NEW_INGESTORS + ORIGINAL_INGESTORS
+DEFAULT_INGESTORS: list[BaseIngestor] = ORIGINAL_INGESTORS
+DEFAULT_MAX_QUERIES: int = 100
 DEFAULT_RETRIEVAL_METHOD: RetrievalMethod = "openai_small"
 DEFAULT_INCLUDE_RELEVANT_DOCS: bool = True
 DEFAULT_RERANKERS: list[RerankerName] = [
     "zeroentropy-small",
     "zeroentropy-large",
-    "zeroentropy-baseten",
 ]
