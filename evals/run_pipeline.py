@@ -2,6 +2,7 @@ import asyncio
 from typing import Literal
 
 from evals.common import RerankerName, RetrievalMethod
+from evals.ingestors.airbnb import AirbnbIngestor
 from evals.ingestors.common import BaseIngestor
 from evals.run_embeddings import run_embeddings
 from evals.run_ingestors import run_ingestors
@@ -15,11 +16,11 @@ from evals.types import (
     DEFAULT_RETRIEVAL_METHOD,
 )
 
-INGESTORS: list[BaseIngestor] = DEFAULT_INGESTORS
-RETRIEVAL_METHOD: RetrievalMethod = DEFAULT_RETRIEVAL_METHOD
-INCLUDE_RELEVANT_DOCS: bool = DEFAULT_INCLUDE_RELEVANT_DOCS
-RERANKERS: list[RerankerName] = DEFAULT_RERANKERS
-MAX_QUERIES = DEFAULT_MAX_QUERIES
+INGESTORS: list[BaseIngestor] = [AirbnbIngestor()]
+RETRIEVAL_METHOD: RetrievalMethod = "qwen3_4b"
+INCLUDE_RELEVANT_DOCS: bool = False
+RERANKERS: list[RerankerName] = ["zeroentropy-large-modal", "cohere"]
+MAX_QUERIES = 1000
 
 Action = Literal["ingestors", "embeddings", "rerankers", "ndcg"]
 ORDER: dict[Action, int] = {

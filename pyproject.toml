@@ -40,6 +40,10 @@ dependencies = [
     "torch==2.7.1",
     "sentence-transformers==4.0.2",
     "rank_bm25==0.2.2",
+    "requests>=2.32.3",
+    "beautifulsoup4>=4.13.4",
+    "protobuf<4.0",
+    "jina[standard]>=3.34.0",
 ]
 
 [tool.setuptools.packages.find]
