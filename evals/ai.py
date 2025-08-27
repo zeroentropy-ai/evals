@@ -903,9 +903,9 @@ async def ai_embedding(
                         logger.debug(
                             f"AIEmbedding RateLimit Wait Time {call_id}: {(end_time - start_time) * 1000:.2f}ms (N_TOKENS={num_tokens_input})"
                         )
-                    prepared_input_texts = [text for text in input_texts]
+                    prepared_input_texts = input_texts[:]
                     for i, text in enumerate(prepared_input_texts):
-                        if len(text) == 0:
+                        if len(text.strip()) == 0:
                             prepared_input_texts[i] = " "
                     if model.model.startswith("BAAI/"):
                         for i, _text in enumerate(prepared_input_texts):
@@ -1003,8 +1003,12 @@ async def ai_embedding(
                     voyageai_client = get_ai_connection().voyageai_client
                     if voyageai_client is None:
                         raise AIValueError("VoyageAI Credentials are not available")
+                    prepared_input_texts = input_texts[:]
+                    for i, text in enumerate(prepared_input_texts):
+                        if len(text.strip()) == 0:
+                            prepared_input_texts[i] = " "
                     result = await voyageai_client.embed(
-                        input_texts,
+                        prepared_input_texts,
                         model=model.model,
                         input_type=(
                             "document"

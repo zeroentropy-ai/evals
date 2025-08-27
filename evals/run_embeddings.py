@@ -286,6 +286,17 @@ async def generate_embeddings(
                 k,
                 embeddings_cache,
             )
+        case "voyageai":
+            top_sorted_indices, similarity_scores = await get_embeddings(
+                AIEmbeddingModel(
+                    company="voyageai",
+                    model="voyage-3-large",
+                ),
+                queries,
+                documents,
+                k,
+                embeddings_cache,
+            )
         case "openai_small":
             top_sorted_indices, similarity_scores = await get_embeddings(
                 AIEmbeddingModel(
