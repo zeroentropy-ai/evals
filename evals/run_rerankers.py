@@ -28,7 +28,7 @@ from evals.types import (
     DEFAULT_RERANKERS,
     DEFAULT_RETRIEVAL_METHOD,
 )
-from evals.utils import read_num_lines_pbar
+from evals.utils import flatten, read_num_lines_pbar
 
 NUM_SIMULTANEOUS_LINES = 25
 
@@ -57,14 +57,18 @@ async def process_query(
         batches[-1].append(document)
         cumulative_length += 20 + len(query.encode()) + len(document.encode())
 
-    all_reranked_scores: list[float] = []
-    for batch in batches:
-        reranked_scores = await ai_rerank(
-            reranker,
-            query,
-            batch,
+    all_reranked_scores = flatten(
+        await asyncio.gather(
+            *[
+                ai_rerank(
+                    reranker,
+                    query,
+                    batch,
+                )
+                for batch in batches
+            ]
         )
-        all_reranked_scores.extend(reranked_scores)
+    )
     return all_reranked_scores
 
 
@@ -129,12 +133,14 @@ async def rerank_dataset(
                     for document in ze_results.documents
                 )
                 if ground_truth_exists:
-                    all_results: list[list[float]] = [
-                        await process_query(
-                            ALL_RERANKERS[reranker], query_text, document_texts
-                        )
-                        for reranker in need_rerank
-                    ]
+                    all_results = await asyncio.gather(
+                        *[
+                            process_query(
+                                ALL_RERANKERS[reranker], query_text, document_texts
+                            )
+                            for reranker in need_rerank
+                        ]
+                    )
                 else:
                     # NOTE: Skip reranker calls when there's no ground truth in the top
                     all_results = [

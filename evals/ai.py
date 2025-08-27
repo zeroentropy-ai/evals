@@ -353,7 +353,7 @@ class AIConnection:
         self.anthropic_client = AsyncAnthropic()
         self.sync_anthropic_client = Anthropic()
         if os.environ.get("ZEROENTROPY_API_KEY") is not None:
-            self.zeroentropy_client = AsyncZeroEntropy()
+            self.zeroentropy_client = AsyncZeroEntropy(timeout=5*60)
         else:
             self.zeroentropy_client = None
         try:
@@ -1283,6 +1283,9 @@ async def ai_rerank(
                         query=query,
                         documents=unprocessed_texts,
                         top_n=top_k,
+                        extra_body={
+                            "latency": "slow",
+                        },
                     )
                     original_order_results = sorted(
                         response.results, key=lambda x: x.index
@@ -1297,8 +1300,10 @@ async def ai_rerank(
                     httpx.ConnectError,
                     httpx.RemoteProtocolError,
                     httpx.TimeoutException,
-                ):
-                    logger.warning(f"{model.company.capitalize()} RateLimitError")
+                ) as e:
+                    logger.warning(
+                        f"{model.company.capitalize()} RateLimitError: {repr(e)}"
+                    )
             if relevance_scores is None:
                 raise AITimeoutError("Cannot overcome ZeroEntropy RateLimitError")
         case "cohere" | "together":
