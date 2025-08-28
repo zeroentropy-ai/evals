@@ -1,5 +1,6 @@
 import math
 import os
+from collections import defaultdict
 
 from evals.common import (
     QueryScores,
@@ -43,13 +44,14 @@ def analyze_ndcg(
     include_relevant_docs: bool,
     rerankers: list[RerankerName],
     k: int,
-) -> None:
+) -> dict[RetrievalMethod | RerankerName, float]:
     print(f"NDCG@{k} for {dataset.id}:")
+    results: dict[RerankerName | RetrievalMethod, float] = {}
 
     ze_results_path = dataset.ze_results_path(retrieval_method, include_relevant_docs)
     if not os.path.exists(ze_results_path):
         print("- Missing ZeResults")
-        return
+        return {}
     total_lines = 0
     ground_truth: dict[str, tuple[list[float], float]] = {}
     default_ndcgs: list[float] = []
@@ -77,6 +79,7 @@ def analyze_ndcg(
             stderr_ndcg = stderr_ndcg / (len(default_ndcgs) ** 0.5)
         else:
             stderr_ndcg = float("nan")
+        results[retrieval_method] = average_ndcg
         print(
             f"- {len(default_ndcgs)}/{total_lines} - {retrieval_method:.<25}{average_ndcg:.5f} ± {stderr_ndcg:.5f}"
         )
@@ -111,9 +114,12 @@ def analyze_ndcg(
             stderr_ndcg = stddev_ndcg / (len(all_ndcgs) ** 0.5)
         else:
             stderr_ndcg = float("nan")
+        results[reranker] = average_ndcg
         print(
             f"- {len(all_ndcgs)}/{total_lines} - {reranker:.<25}{average_ndcg:.5f} ± {stderr_ndcg:.5f}"
         )
+
+    return results
 
 
 def run_ndcg(
@@ -125,8 +131,20 @@ def run_ndcg(
     k: int = DEFAULT_K,
 ) -> None:
     datasets = [ingestor.dataset() for ingestor in ingestors]
+    reranker_to_ndcgs: dict[RerankerName | RetrievalMethod, list[float]] = defaultdict(
+        list
+    )
     for dataset in datasets:
-        analyze_ndcg(dataset, retrieval_method, include_relevant_docs, rerankers, k)
+        results = analyze_ndcg(
+            dataset, retrieval_method, include_relevant_docs, rerankers, k
+        )
+        for reranker, ndcg in results.items():
+            reranker_to_ndcgs[reranker].append(ndcg)
+
+    print("NDCG@20 (Avg) For all datasets")
+    for reranker, ndcgs in reranker_to_ndcgs.items():
+        average_ndcg = avg(ndcgs)
+        print(f"- {reranker:.<25}{average_ndcg:.5f}")
 
 
 if __name__ == "__main__":

@@ -353,7 +353,7 @@ class AIConnection:
         self.anthropic_client = AsyncAnthropic()
         self.sync_anthropic_client = Anthropic()
         if os.environ.get("ZEROENTROPY_API_KEY") is not None:
-            self.zeroentropy_client = AsyncZeroEntropy(timeout=5*60)
+            self.zeroentropy_client = AsyncZeroEntropy(timeout=5 * 60)
         else:
             self.zeroentropy_client = None
         try:
@@ -491,7 +491,7 @@ def ai_num_tokens(model: AIModel | AIEmbeddingModel | AIRerankModel, s: str) -> 
                 .input_tokens
             )
         elif model.company == "openai":
-            if model.model.startswith("gpt-4.1"):
+            if model.model.startswith("gpt-4") or model.model.startswith("gpt-5"):
                 model_str = "gpt-4"
             else:
                 model_str = model.model
@@ -564,6 +564,9 @@ async def ai_call[T: str | BaseModel](
     cache_key = get_call_cache_key(model, messages)
     cached_call = cast(Any, g_cache.get(cache_key)) if g_cache is not None else None  # pyright: ignore[reportUnknownMemberType]
 
+    if model.company == "openai" and model.model.startswith("gpt-5"):
+        temperature = 1.0
+
     if cached_call is not None:
         assert isinstance(cached_call, response_format)
         return cached_call
@@ -621,7 +624,7 @@ async def ai_call[T: str | BaseModel](
                                 for message in messages
                             ],
                             temperature=temperature,
-                            max_tokens=max_tokens,
+                            max_completion_tokens=max_tokens,
                             extra_body=extra_body,
                         )
                         response_content = response.choices[0].message.content
@@ -635,8 +638,8 @@ async def ai_call[T: str | BaseModel](
                                 ai_message_to_openai_message_param(message)
                                 for message in messages
                             ],
-                            temperature=0,
-                            max_tokens=max_tokens,
+                            temperature=temperature,
+                            max_completion_tokens=max_tokens,
                             response_format=response_format,
                             extra_body=extra_body,
                         )
@@ -739,7 +742,7 @@ async def ai_call[T: str | BaseModel](
                                 ai_message_to_anthropic_message_param(message)
                                 for message in combined_messages
                             ],
-                            temperature=0.0,
+                            temperature=temperature,
                             max_tokens=max_tokens,
                         )
                     )

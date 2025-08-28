@@ -20,6 +20,10 @@ RerankerName = Literal[
     "jina",
     "qwen",
     "openai-large-embedding",
+    "gpt-4o-mini",
+    "gpt-4.1-mini",
+    "gpt-5-mini",
+    "gpt-5-nano",
 ]
 
 
