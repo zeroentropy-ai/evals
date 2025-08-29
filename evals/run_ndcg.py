@@ -141,7 +141,7 @@ def run_ndcg(
         for reranker, ndcg in results.items():
             reranker_to_ndcgs[reranker].append(ndcg)
 
-    print("NDCG@20 (Avg) For all datasets")
+    print(f"NDCG@{k} (Avg) For all datasets")
     for reranker, ndcgs in reranker_to_ndcgs.items():
         average_ndcg = avg(ndcgs)
         print(f"- {reranker:.<25}{average_ndcg:.5f}")
