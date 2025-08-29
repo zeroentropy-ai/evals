@@ -9,17 +9,16 @@ from evals.run_ndcg import run_ndcg
 from evals.run_rerankers import run_rerankers
 from evals.types import (
     DEFAULT_INCLUDE_RELEVANT_DOCS,
-    DEFAULT_INGESTORS,
-    DEFAULT_MAX_QUERIES,
-    DEFAULT_RERANKERS,
-    DEFAULT_RETRIEVAL_METHOD,
 )
 
-INGESTORS: list[BaseIngestor] = DEFAULT_INGESTORS
-RETRIEVAL_METHOD: RetrievalMethod = DEFAULT_RETRIEVAL_METHOD
+# Test configuration: Gemini reranker on FIQA with OpenAI retrieval
+from evals.ingestors.fiqa import FiqaIngestor
+
+INGESTORS: list[BaseIngestor] = [FiqaIngestor()]  # Only FIQA dataset
+RETRIEVAL_METHOD: RetrievalMethod = "openai_small"  # OpenAI retrieval
 INCLUDE_RELEVANT_DOCS: bool = DEFAULT_INCLUDE_RELEVANT_DOCS
-RERANKERS: list[RerankerName] = DEFAULT_RERANKERS
-MAX_QUERIES = DEFAULT_MAX_QUERIES
+RERANKERS: list[RerankerName] = ["gpt-5-nano-pairwise"]  # Much faster than pairwise
+MAX_QUERIES = 5  # Very small for quick testing
 
 Action = Literal["ingestors", "embeddings", "rerankers", "ndcg"]
 ORDER: dict[Action, int] = {
@@ -68,4 +67,4 @@ async def run_pipeline(
 
 
 if __name__ == "__main__":
-    asyncio.run(run_pipeline("ingestors", "ndcg"))
+    asyncio.run(run_pipeline("ndcg", "ndcg"))

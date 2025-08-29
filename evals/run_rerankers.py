@@ -9,6 +9,7 @@ from tqdm import tqdm
 from evals.ai import (
     AIEmbeddingModel,
     AIRerankModel,
+    AIModelAsReranker,
     ai_rerank,
     tiktoken_truncate_by_num_tokens,
 )
@@ -40,10 +41,15 @@ company_to_max_batch_characters = {
 
 
 async def process_query(
-    reranker: AIRerankModel | AIEmbeddingModel,
+    reranker: AIRerankModel | AIEmbeddingModel | AIModelAsReranker,
     query: str,
     documents: list[str],
 ) -> list[float]:
+    # Handle AIModelAsReranker differently - it has its own rerank method
+    if isinstance(reranker, AIModelAsReranker):
+        return await reranker.rerank(query, documents)
+    
+    # For traditional rerankers, use batching
     max_batch_characters = company_to_max_batch_characters.get(
         reranker.company, DEFAULT_MAX_BATCH_CHARACTERS
     )

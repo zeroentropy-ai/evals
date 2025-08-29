@@ -19,6 +19,7 @@ import diskcache as dc  # pyright: ignore[reportMissingTypeStubs]
 import httpx
 import numpy as np
 import openai
+import random
 import redis.exceptions
 import tiktoken
 import torch
@@ -45,7 +46,18 @@ from transformers import AutoTokenizer
 from transformers.tokenization_utils_fast import PreTrainedTokenizerFast
 from zeroentropy import AsyncZeroEntropy
 
+from evals.elo import calculate_elos
 from evals.utils import ROOT
+
+
+class RelevanceScore(BaseModel):
+    thoughts: list[str]
+    score: float
+
+
+class DatasetPairScore(BaseModel):
+    thought: str
+    score: float
 
 load_dotenv(override=True)
 
@@ -305,7 +317,238 @@ class AIRerankModel(BaseModel):
             case "modal":
                 return 1000
             case "baseten":
-                return 1000
+                                  return 1000
+
+
+class AIModelAsReranker(BaseModel):
+    ai_model: AIModel
+    type: Literal["pairwise", "pointwise"]
+
+    async def rerank(
+        self,
+        query: str,
+        texts: list[str],
+        *,
+        top_k: int | None = None,
+        # Throw an AITimeoutError after this many retries fail
+        num_ratelimit_retries: int = 10,
+        # Backoff function (Receives index of attempt)
+        backoff_algo: Callable[[int], float] = lambda i: min(2**i, 5),
+    ) -> list[float]:
+        """Rerank texts using the AI model."""
+        if self.type == "pointwise":
+            # For pointwise, score each document individually using the AI model
+            async def score_document(text: str) -> float:
+                messages = [
+                    AIMessage(
+                        role="system",
+                        content="You are a relevance scoring system. Given a query and a document, rate how relevant the document is to the query on a scale from 0.0 to 1.0, where 1.0 is perfectly relevant and 0.0 is completely irrelevant. Respond with only a single number between 0.0 and 1.0."
+                    ),
+                    AIMessage(
+                        role="user",
+                        content=f"Query: {query}\n\nDocument: {text}\n\nRelevance score:"
+                    )
+                ]
+                
+                # Use temperature=1 for gpt-5-nano (only supported value), 0.0 for others
+                temp = 1.0 if self.ai_model.model == "gpt-5-nano" else 0.0
+                response = await ai_call(
+                    self.ai_model,
+                    messages,
+                    temperature=temp,
+                    max_tokens=50,  # Small limit for pointwise scoring (just need a number)
+                    num_ratelimit_retries=num_ratelimit_retries,
+                    backoff_algo=backoff_algo,
+                )
+                
+                # Parse the response as a float - fail if parsing fails
+                score_str = response.strip()
+                try:
+                    score = float(score_str)
+                except (ValueError, TypeError) as e:
+                    raise ValueError(f"Could not parse score from response: {response}") from e
+                
+                # Clamp to [0.0, 1.0]
+                return max(0.0, min(1.0, score))
+            
+            # Score all documents concurrently - fail fast if any scoring fails
+            scores = await asyncio.gather(*[score_document(text) for text in texts])
+            return scores
+            
+        elif self.type == "pairwise":
+            # For pairwise, use ELO algorithm to rank documents
+            n_docs = len(texts)
+            if n_docs <= 1:
+                return [1.0] if n_docs == 1 else []
+            
+            n_cycles = 4
+            pairs: list[tuple[int, int]] = []
+            
+            try:
+                for _ in range(n_cycles):
+                    # Generate random permutation
+                    perm = list(range(n_docs))
+                    random.shuffle(perm)
+                    
+                    # Create pairs from the cycle: i, (i+1) % size
+                    for i in range(n_docs):
+                        doc_a_idx = perm[i]
+                        doc_b_idx = perm[(i + 1) % n_docs]
+                        pairs.append((doc_a_idx, doc_b_idx))
+                
+                logger.info(f"Performing {len(pairs)} pairwise comparisons for {n_docs} documents")
+                
+                # Create pairwise comparison matrix W
+                w = np.zeros((n_docs, n_docs))
+                # Initialize diagonal with 0.5 (neutral self-comparison)
+                for i in range(n_docs):
+                    w[i, i] = 0.5
+                
+                async def compare_pair(doc_a_idx: int, doc_b_idx: int) -> tuple[int, int, float]:
+                    """Compare two documents and return indices + score"""
+                    document_a = texts[doc_a_idx]
+                    document_b = texts[doc_b_idx]
+                    
+                    # Randomly swap documents to avoid position bias
+                    swap = random.random() < 0.5
+                    if swap:
+                        document_a, document_b = document_b, document_a
+                    
+                    try:
+                        response = await ai_call(
+                            self.ai_model,
+                            messages=[
+                                AIMessage(
+                                    role="system",
+                                    content=f"""
+# Task
+
+You are a relevance scoring system. Given a query and two documents (A and B), your job is to decide which document is more relevant to the given query. You should think carefully, considering the pros and cons between each document. For your first few sentences, consider the pros and cons of Document A. Then, spend some time thinking about Document B. Then, at the end, compare, and make a decision as to which one is more relevant. Do NOT make a decision in the beginning of your thoughts, stay open-minded until the last 1-2 sentences of your thoughts.
+
+# Scoring
+
+The score should range from -1.0 to 1.0, where negative means document A is more relevant, and positive means Document B is more relevant.
+You can pick any number from -1.0 to 1.0.
+                                    """,
+                                ),
+                                AIMessage(
+                                    role="user",
+                                    content=f"# Query:\n\n{query}\n\n# Document A:\n\n{document_a}\n\n# Document B:\n\n{document_b}\n\n",
+                                )
+                            ],
+                            temperature=1,
+                            response_format=RelevanceScore,
+                            max_tokens=4000,  # High limit for pairwise comparisons with reasoning
+                            num_ratelimit_retries=num_ratelimit_retries,
+                            backoff_algo=backoff_algo,
+                        )
+                    except Exception as e:
+                        # Check if it's a JSON parsing error with control characters
+                        error_str = str(e)
+                        if "control character" in error_str and "json_invalid" in error_str:
+                            # Try to fall back to string response and parse manually
+                            try:
+                                import json
+                                import re
+                                
+                                raw_response = await ai_call(
+                                    self.ai_model,
+                                    messages=[
+                                        AIMessage(
+                                            role="system",
+                                            content=f"""
+# Task
+
+You are a relevance scoring system. Given a query and two documents (A and B), your job is to decide which document is more relevant to the given query. You should think carefully, considering the pros and cons between each document. For your first few sentences, consider the pros and cons of Document A. Then, spend some time thinking about Document B. Then, at the end, compare, and make a decision as to which one is more relevant. Do NOT make a decision in the beginning of your thoughts, stay open-minded until the last 1-2 sentences of your thoughts.
+
+# Scoring
+
+The score should range from -1.0 to 1.0, where negative means document A is more relevant, and positive means Document B is more relevant.
+You can pick any number from -1.0 to 1.0.
+
+# Output Format
+
+Return a JSON object with "thoughts" (array of strings) and "score" (number).
+                                            """,
+                                        ),
+                                        AIMessage(
+                                            role="user",
+                                            content=f"# Query:\n\n{query}\n\n# Document A:\n\n{document_a}\n\n# Document B:\n\n{document_b}\n\n",
+                                        )
+                                    ],
+                                    temperature=1,
+                                    max_tokens=4000,  # Same high limit for fallback
+                                    num_ratelimit_retries=num_ratelimit_retries,
+                                    backoff_algo=backoff_algo,
+                                )
+                                
+                                # Clean control characters from the response
+                                cleaned_response = re.sub(r'[\x00-\x1f\x7f-\x9f]', '', raw_response)
+                                
+                                # Try to parse as JSON
+                                try:
+                                    parsed = json.loads(cleaned_response)
+                                    response = RelevanceScore(
+                                        thoughts=parsed.get("thoughts", ["Fallback response"]),
+                                        score=float(parsed.get("score", 0.0))
+                                    )
+                                except (json.JSONDecodeError, KeyError, ValueError):
+                                    # Final fallback - extract score with regex
+                                    score_match = re.search(r'"score":\s*(-?\d+\.?\d*)', cleaned_response)
+                                    fallback_score = float(score_match.group(1)) if score_match else 0.0
+                                    response = RelevanceScore(
+                                        thoughts=["Fallback response due to parsing error"],
+                                        score=fallback_score
+                                    )
+                            except Exception:
+                                # If all fallbacks fail, re-raise original error
+                                raise ValueError(f"AI call failed for pair ({doc_a_idx}, {doc_b_idx}): {e}") from e
+                        else:
+                            # If it's not a JSON control character error, re-raise
+                            raise ValueError(f"AI call failed for pair ({doc_a_idx}, {doc_b_idx}): {e}") from e
+                    
+                    thought = "\n".join(response.thoughts)
+                    score = response.score
+                    if swap:
+                        thought = f"(SWAPPED)\n{thought}"
+                        score = -score
+                    
+                    # Clamp score to [-1.0, 1.0] range
+                    score = max(-1.0, min(1.0, score))
+                    
+                    return (doc_a_idx, doc_b_idx, score)
+                
+                # Perform all pairwise comparisons - fail fast if any comparison fails
+                from tqdm import tqdm
+                
+                # Use standard asyncio.gather with manual progress tracking
+                tasks = [compare_pair(doc_a_idx, doc_b_idx) for doc_a_idx, doc_b_idx in pairs]
+                
+                # Create progress bar
+                progress_bar = tqdm(total=len(tasks), desc=f"Pairwise comparisons ({len(pairs)} pairs)")
+                
+                # Execute tasks and update progress
+                comparison_results: list[tuple[int, int, float]] = []
+                for task in asyncio.as_completed(tasks):
+                    result = await task
+                    comparison_results.append(result)
+                    progress_bar.update(1)
+                progress_bar.close()
+
+                for doc_a_idx, doc_b_idx, score in comparison_results:
+                    w[doc_b_idx, doc_a_idx] += 0.5 + score/2    
+                    w[doc_a_idx, doc_b_idx] += 0.5 - score/2
+                # Calculate ELO ratings - fail if ELO calculation fails
+                elos, _ = calculate_elos(w)
+                elos = [float(elo) for elo in elos]
+                
+                return elos
+                
+            except Exception as e:
+                logger.error(f"Fatal error in pairwise reranking: {e}")
+                raise
+        else:
+            raise ValueError(f"Unknown reranker type: {self.type}")
 
 
 # Cache (Default=1GB, LRU)
@@ -493,6 +736,9 @@ def ai_num_tokens(model: AIModel | AIEmbeddingModel | AIRerankModel, s: str) -> 
         elif model.company == "openai":
             if model.model.startswith("gpt-4.1"):
                 model_str = "gpt-4"
+            elif model.model == "gpt-5-nano":
+                # gpt-5-nano is not recognized by tiktoken, use gpt-4 encoding
+                model_str = "gpt-4"
             else:
                 model_str = model.model
             encoding = tiktoken.encoding_for_model(model_str)
@@ -614,32 +860,59 @@ async def ai_call[T: str | BaseModel](
                             if USING_VERTEX_AI:
                                 model_str = f"google/{model_str}"
                     if response_format is str:
-                        response = await client.chat.completions.create(
-                            model=model_str,
-                            messages=[
-                                ai_message_to_openai_message_param(message)
-                                for message in messages
-                            ],
-                            temperature=temperature,
-                            max_tokens=max_tokens,
-                            extra_body=extra_body,
-                        )
+                        # Use max_completion_tokens for newer models like gpt-5-nano
+                        if model.model in ["gpt-5-nano"]:
+                            response = await client.chat.completions.create(
+                                model=model_str,
+                                messages=[
+                                    ai_message_to_openai_message_param(message)
+                                    for message in messages
+                                ],
+                                temperature=temperature,
+                                max_completion_tokens=max_tokens,
+                                extra_body=extra_body,
+                            )
+                        else:
+                            response = await client.chat.completions.create(
+                                model=model_str,
+                                messages=[
+                                    ai_message_to_openai_message_param(message)
+                                    for message in messages
+                                ],
+                                temperature=temperature,
+                                max_tokens=max_tokens,
+                                extra_body=extra_body,
+                            )
                         response_content = response.choices[0].message.content
                         assert response_content is not None
                         assert isinstance(response_content, response_format)
                         return_value = response_content
                     else:
-                        response = await client.beta.chat.completions.parse(
-                            model=model_str,
-                            messages=[
-                                ai_message_to_openai_message_param(message)
-                                for message in messages
-                            ],
-                            temperature=0,
-                            max_tokens=max_tokens,
-                            response_format=response_format,
-                            extra_body=extra_body,
-                        )
+                        # Use max_completion_tokens for newer models like gpt-5-nano
+                        if model.model in ["gpt-5-nano"]:
+                            response = await client.beta.chat.completions.parse(
+                                model=model_str,
+                                messages=[
+                                    ai_message_to_openai_message_param(message)
+                                    for message in messages
+                                ],
+                                temperature=1,  # gpt-5-nano only supports temperature=1
+                                max_completion_tokens=max_tokens,
+                                response_format=response_format,
+                                extra_body=extra_body,
+                            )
+                        else:
+                            response = await client.beta.chat.completions.parse(
+                                model=model_str,
+                                messages=[
+                                    ai_message_to_openai_message_param(message)
+                                    for message in messages
+                                ],
+                                temperature=0,
+                                max_tokens=max_tokens,
+                                response_format=response_format,
+                                extra_body=extra_body,
+                            )
                         assert response.usage is not None
                         reasoning_tokens = (
                             response.usage.completion_tokens_details.reasoning_tokens
@@ -660,7 +933,8 @@ async def ai_call[T: str | BaseModel](
                 except openai.LengthFinishReasonError as e:
                     raise AIRuntimeError("LengthFinishReasonError") from e
                 except openai.RateLimitError as e:
-                    logger.warning(f"OpenAI RateLimitError: {e}")
+                    #logger.warning(f"OpenAI RateLimitError: {e}")
+                    pass
             if return_value is None:
                 raise AITimeoutError("Cannot overcome OpenAI RateLimitError")
 

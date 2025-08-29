@@ -39,7 +39,7 @@ dependencies = [
     "pandas-stubs==2.2.3.250308",
     "torch==2.7.1",
     "sentence-transformers==4.0.2",
-    "rank_bm25==0.2.2",
+    "rank-bm25==0.2.2",
 ]
 
 [tool.setuptools.packages.find]

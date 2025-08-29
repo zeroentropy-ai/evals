@@ -1,4 +1,4 @@
-from evals.ai import AIEmbeddingModel, AIRerankModel
+from evals.ai import AIEmbeddingModel, AIRerankModel, AIModel, AIModelAsReranker
 from evals.common import RerankerName, RetrievalMethod
 from evals.ingestors.bioasq import BioasqIngestor
 from evals.ingestors.common import BaseIngestor
@@ -21,7 +21,7 @@ from evals.ingestors.quora import QuoraIngestor
 from evals.ingestors.quora_swedish import QuoraSwedishIngestor
 from evals.ingestors.stackoverflowqa import StackoverflowqaIngestor
 
-ALL_RERANKERS: dict[RerankerName, AIRerankModel | AIEmbeddingModel] = {
+ALL_RERANKERS: dict[RerankerName, AIRerankModel | AIEmbeddingModel | AIModelAsReranker] = {
     "cohere": AIRerankModel(company="cohere", model="rerank-v3.5"),
     "salesforce": AIRerankModel(company="together", model="Salesforce/Llama-Rank-V1"),
     "zeroentropy-large": AIRerankModel(company="zeroentropy", model="zerank-1"),
@@ -50,6 +50,31 @@ ALL_RERANKERS: dict[RerankerName, AIRerankModel | AIEmbeddingModel] = {
         company="openai",
         model="text-embedding-3-large",
     ),
+    "gpt-5-nano-pointwise": AIModelAsReranker(
+        ai_model=AIModel(company="openai", model="gpt-5-nano"),
+        type="pointwise"
+    ),
+    "gpt-5-nano-pairwise": AIModelAsReranker(
+        ai_model=AIModel(company="openai", model="gpt-5-nano"),
+        type="pairwise"
+    ),
+    "claude-pointwise": AIModelAsReranker(
+        ai_model=AIModel(company="anthropic", model="claude-3-5-sonnet-20241022"),
+        type="pointwise"
+    ),
+    "claude-pairwise": AIModelAsReranker(
+        ai_model=AIModel(company="anthropic", model="claude-3-5-sonnet-20241022"),
+        type="pairwise"
+    ),
+    "gemini-pointwise": AIModelAsReranker(
+        ai_model=AIModel(company="google", model="gemini-1.5-pro"),
+        type="pointwise"
+    ),
+    "gemini-pairwise": AIModelAsReranker(
+        ai_model=AIModel(company="google", model="gemini-1.5-pro"),
+        type="pairwise"
+    ),
+
 }
 
 ORIGINAL_INGESTORS: list[BaseIngestor] = [

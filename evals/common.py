@@ -2,6 +2,7 @@ from typing import Any, Literal
 
 from pydantic import AliasChoices, BaseModel, Field, computed_field
 
+
 from evals.utils import ROOT
 
 RetrievalMethod = Literal["qwen3_4b", "qwen3_0.6b", "openai_small", "bm25", "hybrid"]
@@ -18,6 +19,12 @@ RerankerName = Literal[
     "jina",
     "qwen",
     "openai-large-embedding",
+    "gpt-5-nano-pointwise",
+    "gpt-5-nano-pairwise",
+    "claude-pointwise",
+    "claude-pairwise",
+    "gemini-pointwise",
+    "gemini-pairwise",
 ]
 
 
@@ -116,3 +123,5 @@ class DocumentScores(BaseModel):
 class QueryScores(BaseModel):
     query_id: str
     documents: list[DocumentScores]
+
+
