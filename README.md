@@ -13,7 +13,7 @@ The evaluation pipeline consists of four main stages:
 ## Installation
 
 ### Prerequisites
-- Python 3.12
+- uv
 - CUDA-capable GPU (optional, for local model inference)
 
 ### Setup
@@ -23,40 +23,31 @@ git clone <repository-url>
 cd evals
 
 # Install dependencies using uv (recommended) or pip
-pip install -e .
+uv sync
 
 # Set up environment variables
-cp .env.example .env
-# Edit .env with your API keys and configuration
+cp .env.example .env # Edit .env with your API keys and configuration
 ```
 
 ### Required Environment Variables
 ```bash
 # ZeroEntropy
 ZEROENTROPY_API_KEY=your_zeroentropy_key
-
 # OpenAI
 OPENAI_API_KEY=your_openai_key
-
 # Anthropic (optional)
 ANTHROPIC_API_KEY=your_anthropic_key
-
 # Cohere (optional)
 COHERE_API_KEY=your_cohere_key
-
 # VoyageAI (optional)
 VOYAGEAI_API_KEY=your_voyage_key
-
 # Jina AI (optional)
 JINA_API_KEY=your_jina_key
-
 # Modal (optional, for custom models)
 MODAL_KEY=your_modal_key
 MODAL_SECRET=your_modal_secret
-
 # Baseten (optional)
 BASETEN_API_KEY=your_baseten_key
-
 # Together AI (optional)
 TOGETHER_API_KEY=your_together_key
 ```
@@ -182,7 +173,7 @@ from evals.common import Document, Query, QRel
 class CustomIngestor(BaseIngestor):
     def dataset_id(self) -> str:
         return "custom/my_dataset"
-    
+
     def ingest(self) -> tuple[list[Query], list[Document], list[QRel]]:
         # Load your data
         queries = [Query(id="q1", query="What is AI?")]
@@ -201,7 +192,7 @@ from evals.ingestors.master_mteb_ingestion import MasterMtebIngestor
 # Example: Run on train split
 train_ingestor = MasterMtebIngestor(
     task_name="TwitterHjerneRetrieval",
-    dataset_name="twitterhjerneretrieval", 
+    dataset_name="twitterhjerneretrieval",
     language="dan-Latn",
     split="train"  # Change this to "train"
 )
@@ -215,12 +206,12 @@ For custom datasets, modify the split parameter in the ingestor configuration in
 
 ## Output Structure
 
-Results are stored in `evals/results/` with the following structure:
+Results are stored in `{ROOT}/data/datasets/` with the following structure:
 ```
-evals/results/
+data/datasets/
 ├── {dataset_id}/
 │   ├── queries.jsonl           # Processed queries
-│   ├── documents.jsonl         # Processed documents  
+│   ├── documents.jsonl         # Processed documents
 │   ├── qrels.jsonl            # Relevance judgments
 │   └── {retrieval_method}/
 │       └── {merged|unmerged}/
@@ -281,7 +272,7 @@ Add to `ALL_RERANKERS` in `evals/types.py`:
 "my-embedding": AIEmbeddingModel(company="my_company", model="my-model"),
 ```
 
-#### Reranking Models  
+#### Reranking Models
 Add to `ALL_RERANKERS` in `evals/types.py`:
 ```python
 "my-reranker": AIRerankModel(company="my_company", model="my-model"),
@@ -321,9 +312,10 @@ python -c "import asyncio; from evals.run_embeddings import run_embeddings; asyn
 
 ### Getting Help
 
-- Check the logs in `evals/logs/`
-- Review the configuration in `evals/types.py`  
-- Examine individual ingestor implementations in `evals/ingestors/`
+- Check the logs in `{ROOT}/logs/*`
+- Review the configuration in `evals/types.py`
+- Examine individual ingestor implementations in `evals/ingestors/*`
+- Ask us on [Slack](https://go.zeroentropy.dev/slack) or [Discord](https://go.zeroentropy.dev/discord)
 
 ## License
 

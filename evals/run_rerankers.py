@@ -12,6 +12,7 @@ from evals.ai import (
     ai_rerank,
     tiktoken_truncate_by_num_tokens,
 )
+from evals.ai_rerank import AIModelAsReranker, ai_model_rerank
 from evals.common import (
     DocumentScores,
     QueryScores,
@@ -28,7 +29,7 @@ from evals.types import (
     DEFAULT_RERANKERS,
     DEFAULT_RETRIEVAL_METHOD,
 )
-from evals.utils import read_num_lines_pbar
+from evals.utils import flatten, read_num_lines_pbar
 
 NUM_SIMULTANEOUS_LINES = 25
 
@@ -37,35 +38,48 @@ DEFAULT_MAX_BATCH_CHARACTERS = 750_000
 company_to_max_batch_characters = {
     "modal": 100_000,
 }
+AI_MODEL_AS_RERANKER_MAX_BYTES = 50_000
 
 
 async def process_query(
-    reranker: AIRerankModel | AIEmbeddingModel,
+    reranker: AIRerankModel | AIEmbeddingModel | AIModelAsReranker,
     query: str,
     documents: list[str],
 ) -> list[float]:
-    max_batch_characters = company_to_max_batch_characters.get(
-        reranker.company, DEFAULT_MAX_BATCH_CHARACTERS
-    )
+    match reranker:
+        case AIRerankModel() | AIEmbeddingModel():
+            max_batch_characters = company_to_max_batch_characters.get(
+                reranker.company, DEFAULT_MAX_BATCH_CHARACTERS
+            )
 
-    batches: list[list[str]] = []
-    cumulative_length = 0
-    for document in documents:
-        if len(batches) == 0 or cumulative_length > max_batch_characters:
-            batches.append([])
+            batches: list[list[str]] = []
             cumulative_length = 0
-        batches[-1].append(document)
-        cumulative_length += 20 + len(query.encode()) + len(document.encode())
-
-    all_reranked_scores: list[float] = []
-    for batch in batches:
-        reranked_scores = await ai_rerank(
-            reranker,
-            query,
-            batch,
-        )
-        all_reranked_scores.extend(reranked_scores)
-    return all_reranked_scores
+            for document in documents:
+                if len(batches) == 0 or cumulative_length > max_batch_characters:
+                    batches.append([])
+                    cumulative_length = 0
+                batches[-1].append(document)
+                cumulative_length += 20 + len(query.encode()) + len(document.encode())
+            scores = flatten(
+                await asyncio.gather(
+                    *[
+                        ai_rerank(
+                            reranker,
+                            query,
+                            batch,
+                        )
+                        for batch in batches
+                    ]
+                )
+            )
+        case AIModelAsReranker():
+            scores = await ai_model_rerank(
+                reranker,
+                query,
+                documents,
+                max_bytes=AI_MODEL_AS_RERANKER_MAX_BYTES,
+            )
+    return scores
 
 
 async def rerank_dataset(
@@ -129,12 +143,14 @@ async def rerank_dataset(
                     for document in ze_results.documents
                 )
                 if ground_truth_exists:
-                    all_results: list[list[float]] = [
-                        await process_query(
-                            ALL_RERANKERS[reranker], query_text, document_texts
-                        )
-                        for reranker in need_rerank
-                    ]
+                    all_results = await asyncio.gather(
+                        *[
+                            process_query(
+                                ALL_RERANKERS[reranker], query_text, document_texts
+                            )
+                            for reranker in need_rerank
+                        ]
+                    )
                 else:
                     # NOTE: Skip reranker calls when there's no ground truth in the top
                     all_results = [
@@ -161,10 +177,14 @@ async def rerank_dataset(
                     f_write[reranker].flush()
             pbar.update(1)
 
+        def on_task_complete(task: asyncio.Task[None]) -> None:
+            pending_tasks.remove(task)
+            task.result()  # Throw exception if the task failed
+
         for line in f:
             task = asyncio.create_task(wrapped_process_line(line))
             pending_tasks.add(task)
-            task.add_done_callback(pending_tasks.remove)
+            task.add_done_callback(on_task_complete)
 
             while len(pending_tasks) >= NUM_SIMULTANEOUS_LINES:
                 await asyncio.sleep(0.1)

@@ -1,4 +1,5 @@
-from evals.ai import AIEmbeddingModel, AIRerankModel
+from evals.ai import AIEmbeddingModel, AIModel, AIRerankModel
+from evals.ai_rerank import AIModelAsReranker
 from evals.common import RerankerName, RetrievalMethod
 from evals.ingestors.bioasq import BioasqIngestor
 from evals.ingestors.common import BaseIngestor
@@ -21,7 +22,9 @@ from evals.ingestors.quora import QuoraIngestor
 from evals.ingestors.quora_swedish import QuoraSwedishIngestor
 from evals.ingestors.stackoverflowqa import StackoverflowqaIngestor
 
-ALL_RERANKERS: dict[RerankerName, AIRerankModel | AIEmbeddingModel] = {
+ALL_RERANKERS: dict[
+    RerankerName, AIRerankModel | AIEmbeddingModel | AIModelAsReranker
+] = {
     "cohere": AIRerankModel(company="cohere", model="rerank-v3.5"),
     "salesforce": AIRerankModel(company="together", model="Salesforce/Llama-Rank-V1"),
     "zeroentropy-large": AIRerankModel(company="zeroentropy", model="zerank-1"),
@@ -49,6 +52,34 @@ ALL_RERANKERS: dict[RerankerName, AIRerankModel | AIEmbeddingModel] = {
     "openai-large-embedding": AIEmbeddingModel(
         company="openai",
         model="text-embedding-3-large",
+    ),
+    "gpt-4o-mini": AIModelAsReranker(
+        model=AIModel(
+            company="openai",
+            model="gpt-4o-mini",
+        ),
+        rerank_type="listwise",
+    ),
+    "gpt-4.1-mini": AIModelAsReranker(
+        model=AIModel(
+            company="openai",
+            model="gpt-4.1-mini",
+        ),
+        rerank_type="listwise",
+    ),
+    "gpt-5-mini": AIModelAsReranker(
+        model=AIModel(
+            company="openai",
+            model="gpt-5-mini",
+        ),
+        rerank_type="listwise",
+    ),
+    "gpt-5-nano": AIModelAsReranker(
+        model=AIModel(
+            company="openai",
+            model="gpt-5-nano",
+        ),
+        rerank_type="listwise",
     ),
 }
 
@@ -218,6 +249,10 @@ DEFAULT_MAX_QUERIES: int = 100
 DEFAULT_RETRIEVAL_METHOD: RetrievalMethod = "openai_small"
 DEFAULT_INCLUDE_RELEVANT_DOCS: bool = True
 DEFAULT_RERANKERS: list[RerankerName] = [
-    "zeroentropy-small",
+    "cohere",
+    "gpt-4o-mini",
+    "gpt-4.1-mini",
+    "gpt-5-mini",
+    "gpt-5-nano",
     "zeroentropy-large",
 ]
