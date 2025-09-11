@@ -50,14 +50,15 @@ def analyze_recall(
     include_relevant_docs: bool,
     rerankers: list[RerankerName],
     k: int,
-) -> None:
+) -> dict[RerankerName | RetrievalMethod, float]:
     print(f"Recall@{k} for {dataset.id}:")
+    results: dict[RerankerName | RetrievalMethod, float] = {}
 
     # Load qrels to get total relevant documents per query
     qrels_path = dataset.qrels_path
     if not os.path.exists(qrels_path):
         print("- Missing qrels")
-        return
+        return {}
 
     query_total_relevant: dict[str, float] = defaultdict(float)
     with open(qrels_path) as f:
@@ -69,7 +70,7 @@ def analyze_recall(
     ze_results_path = dataset.ze_results_path(retrieval_method, include_relevant_docs)
     if not os.path.exists(ze_results_path):
         print("- Missing ZeResults")
-        return
+        return {}
     total_lines = 0
     ground_truth: dict[str, list[float]] = {}
     default_recalls: list[float] = []
@@ -100,6 +101,7 @@ def analyze_recall(
             stderr_recall = stderr_recall / (len(default_recalls) ** 0.5)
         else:
             stderr_recall = float("nan")
+        results[retrieval_method] = average_recall
         print(
             f"- {len(default_recalls)}/{total_lines} - {retrieval_method:.<25}{average_recall:.5f} ± {stderr_recall:.5f}"
         )
@@ -143,9 +145,12 @@ def analyze_recall(
             stderr_recall = stddev_recall / (len(all_recalls) ** 0.5)
         else:
             stderr_recall = float("nan")
+        results[reranker] = average_recall
         print(
             f"- {len(all_recalls)}/{total_lines} - {reranker:.<25}{average_recall:.5f} ± {stderr_recall:.5f}"
         )
+
+    return results
 
 
 def run_recall(
@@ -157,8 +162,20 @@ def run_recall(
     k: int = DEFAULT_K,
 ) -> None:
     datasets = [ingestor.dataset() for ingestor in ingestors]
+    reranker_to_recalls: dict[RerankerName | RetrievalMethod, list[float]] = (
+        defaultdict(list)
+    )
     for dataset in datasets:
-        analyze_recall(dataset, retrieval_method, include_relevant_docs, rerankers, k)
+        results = analyze_recall(
+            dataset, retrieval_method, include_relevant_docs, rerankers, k
+        )
+        for reranker, recall in results.items():
+            reranker_to_recalls[reranker].append(recall)
+
+    print(f"Recall@{k} (Avg) For all datasets")
+    for reranker, recalls in reranker_to_recalls.items():
+        average_recall = avg(recalls)
+        print(f"- {reranker:.<25}{average_recall:.5f}")
 
 
 if __name__ == "__main__":
