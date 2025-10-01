@@ -11,7 +11,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Literal, TextIO, cast
 from uuid import uuid4
-
+from evals.ai_vllm import rerank_vllm
 import anthropic
 import cohere
 import cohere.core
@@ -267,6 +267,7 @@ class AIRerankModel(BaseModel):
         "modal",
         "zeroentropy",
         "baseten",
+        "fastapi",  # Add this
     ]
     model: str
 
@@ -1498,6 +1499,9 @@ async def ai_rerank(
                     await asyncio.sleep(1)
             if relevance_scores is None:
                 raise AITimeoutError("Cannot overcome Modal RateLimitError")
+        case "fastapi":
+            from evals.ai_fastapi import rerank_fastapi
+            relevance_scores = await rerank_fastapi(query, unprocessed_texts)
         case "baseten":
             for i in range(num_ratelimit_retries):
                 try:

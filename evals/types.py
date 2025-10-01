@@ -28,6 +28,14 @@ ALL_RERANKERS: dict[
     "cohere": AIRerankModel(company="cohere", model="rerank-v3.5"),
     "salesforce": AIRerankModel(company="together", model="Salesforce/Llama-Rank-V1"),
     "zeroentropy-large": AIRerankModel(company="zeroentropy", model="zerank-1"),
+    "zeroentropy-large-fp8": AIRerankModel(
+        company="fastapi",
+        model="modelopt-fp8",
+    ),
+    "zeroentropy-small-fp8": AIRerankModel(
+        company="fastapi",
+        model="modelopt-small-fp8",
+    ),
     "zeroentropy-small": AIRerankModel(company="zeroentropy", model="zerank-1-small"),
     "zeroentropy-large-modal": AIRerankModel(
         company="modal",
@@ -255,4 +263,5 @@ DEFAULT_RERANKERS: list[RerankerName] = [
     "gpt-5-mini",
     "gpt-5-nano",
     "zeroentropy-large",
+    "zeroentropy-large-fp8",  # Add this line
 ]
