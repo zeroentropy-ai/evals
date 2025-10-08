@@ -107,14 +107,14 @@ def analyze_recall(
         )
 
     for reranker in rerankers:
-        latest_ze_results_path = dataset.latest_ze_results_path(
+        ze_scores_path = dataset.ze_scores_path(
             retrieval_method, include_relevant_docs, reranker
         )
-        if not os.path.exists(latest_ze_results_path):
-            print(f"- Missing Latest ZeResults for {reranker}")
+        if not os.path.exists(ze_scores_path):
+            print(f"- Missing ZeScores path for {reranker}")
             continue
         all_recalls: list[float] = []
-        with open(latest_ze_results_path) as f:
+        with open(ze_scores_path) as f:
             for line in f:
                 reranker_data = QueryScores.model_validate_json(line)
                 if reranker_data.query_id not in ground_truth:

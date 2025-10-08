@@ -94,16 +94,16 @@ async def rerank_dataset(
 
     processed_query_ids: dict[RerankerName, set[str]] = defaultdict(set)
     for reranker in rerankers:
-        latest_ze_results_path = dataset.latest_ze_results_path(
+        ze_scores_path = dataset.ze_scores_path(
             retrieval_method, include_relevant_docs, reranker
         )
-        if os.path.exists(latest_ze_results_path):
-            with open(latest_ze_results_path) as f:
+        if os.path.exists(ze_scores_path):
+            with open(ze_scores_path) as f:
                 for line in f:
                     reranker_data = QueryScores.model_validate_json(line)
                     processed_query_ids[reranker].add(reranker_data.query_id)
         else:
-            os.makedirs(os.path.dirname(latest_ze_results_path), exist_ok=True)
+            os.makedirs(os.path.dirname(ze_scores_path), exist_ok=True)
 
     pbar = tqdm(
         desc=f"Reranking {dataset.id}",
@@ -115,7 +115,7 @@ async def rerank_dataset(
         f_write: dict[RerankerName, TextIO] = {
             reranker: stack.enter_context(
                 open(
-                    dataset.latest_ze_results_path(
+                    dataset.ze_scores_path(
                         retrieval_method, include_relevant_docs, reranker
                     ),
                     "a",
