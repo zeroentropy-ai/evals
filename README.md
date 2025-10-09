@@ -218,7 +218,7 @@ data/datasets/
 │           ├── ze_results.jsonl        # Initial retrieval results
 │           ├── embeddings_cache.db     # Embedding cache
 │           └── {reranker}/
-│               └── latest_ze_results.jsonl  # Reranked results
+│               └── ze_scores.jsonl  # Reranked results
 ```
 
 ## Performance Tips

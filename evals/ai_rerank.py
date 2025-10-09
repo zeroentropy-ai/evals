@@ -1,31 +1,31 @@
 from typing import Literal
 
 from pydantic import BaseModel
+import diskcache as dc
 
 from evals.ai import AIMessage, AIModel, ai_call
 from evals.utils import clamp
-
 
 class AIModelAsReranker(BaseModel):
     model: AIModel
     rerank_type: Literal["listwise"]
 
-
 class RerankResult(BaseModel):
     index: int
     score: float
-
 
 class RerankOutput(BaseModel):
     results: list[RerankResult]
 
 
-async def ai_model_rerank(
+async def ai_rerank_by_ai_model(
     model: AIModelAsReranker,
     query: str,
     documents: list[str],
     *,
     max_bytes: int,
+    # Cache
+    cache: dc.Cache | None = None,
 ) -> list[float]:
     remaining_bytes = max_bytes
     truncated_documents: list[str] = []
@@ -62,6 +62,7 @@ You are a reranker. You will be given a query, and a list of documents, and your
             ),
         ],
         response_format=RerankOutput,
+        cache=cache,
     )
 
     scores = [0.0 for _ in range(len(documents))]

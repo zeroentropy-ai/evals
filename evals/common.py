@@ -69,7 +69,7 @@ class ZEDataset(BaseModel):
         merge_status: MergeStatus = "merged" if include_relevant_docs else "unmerged"
         return self.file_path(f"{retrieval_method}/{merge_status}/embeddings_cache.db")
 
-    def latest_ze_results_path(
+    def reranker_cache_path(
         self,
         retrieval_method: RetrievalMethod,
         include_relevant_docs: bool,
@@ -77,7 +77,18 @@ class ZEDataset(BaseModel):
     ) -> str:
         merge_status: MergeStatus = "merged" if include_relevant_docs else "unmerged"
         return self.file_path(
-            f"{retrieval_method}/{merge_status}/{reranker}/latest_ze_results.jsonl"
+            f"{retrieval_method}/{merge_status}/{reranker}/reranker_cache.db"
+        )
+
+    def ze_scores_path(
+        self,
+        retrieval_method: RetrievalMethod,
+        include_relevant_docs: bool,
+        reranker: RerankerName,
+    ) -> str:
+        merge_status: MergeStatus = "merged" if include_relevant_docs else "unmerged"
+        return self.file_path(
+            f"{retrieval_method}/{merge_status}/{reranker}/ze_scores.jsonl"
         )
 
 
