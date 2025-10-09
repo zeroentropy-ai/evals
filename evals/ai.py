@@ -132,6 +132,9 @@ class AIMessage(BaseModel):
     role: Literal["system", "user", "assistant"]
     content: str
 
+class AIModelAsReranker(BaseModel):
+    model: AIModel
+    rerank_type: Literal["listwise"]
 
 def decode_embedding(embedding: str) -> AIEmbedding:
     return np.frombuffer(base64.b64decode(embedding), dtype="float16").astype(
@@ -560,9 +563,13 @@ async def ai_call[T: str | BaseModel](
     response_format: type[T] = str,
     # Usage Filename. If provided, will store usage statistics in ./logs/usage/{usage_filename}.csv
     usage_filename: str | None = None,
+    # Cache
+    cache: dc.Cache | None = None,
 ) -> T:
+    if cache is None:
+        cache = g_cache
     cache_key = get_call_cache_key(model, messages)
-    cached_call = cast(Any, g_cache.get(cache_key)) if g_cache is not None else None  # pyright: ignore[reportUnknownMemberType]
+    cached_call = cast(Any, cache.get(cache_key)) if cache is not None else None  # pyright: ignore[reportUnknownMemberType]
 
     if model.company == "openai" and model.model.startswith("gpt-5"):
         temperature = 1.0
@@ -780,8 +787,8 @@ async def ai_call[T: str | BaseModel](
             if return_value is None:
                 raise AITimeoutError("Cannot overcome Anthropic RateLimitError")
 
-    if g_cache is not None:
-        g_cache.set(cache_key, return_value)  # pyright: ignore[reportUnknownMemberType]
+    if cache is not None:
+        cache.set(cache_key, return_value)  # pyright: ignore[reportUnknownMemberType]
     return return_value
 
 
@@ -790,7 +797,6 @@ def get_embeddings_cache_key(
 ) -> str:
     key = f"{model.company}||||{model.model}||||{embedding_type.name}||||{hashlib.md5(text.encode()).hexdigest()}"
     return key
-
 
 def cosine_similarity(vec1: AIEmbedding, vec2: AIEmbedding) -> float:
     return np.dot(vec1, vec2)
@@ -837,6 +843,8 @@ async def ai_embedding(
             logger.debug(f"Cache Read Time: {(end_time - start_time) * 1000:.2f}ms")
     if not any(embedding is None for embedding in text_embeddings):
         return cast(list[AIEmbedding], text_embeddings)
+    
+    # filter to only empty indices
     required_text_embeddings_indices = [
         i for i in range(len(text_embeddings)) if text_embeddings[i] is None
     ]
@@ -1204,6 +1212,8 @@ async def ai_rerank_by_embedding(
     *,
     # Throw an AITimeoutError after this many retries fail
     num_ratelimit_retries: int = 10,
+    # Cache
+    cache: dc.Cache | None = None,
 ) -> list[float]:
     # Get embeddings for query and documents
     query_embedding = await ai_embedding(
@@ -1211,6 +1221,7 @@ async def ai_rerank_by_embedding(
         [query],
         AIEmbeddingType.QUERY,
         num_ratelimit_retries=num_ratelimit_retries,
+        cache=cache,
     )
 
     document_embeddings = await ai_embedding(
@@ -1218,6 +1229,7 @@ async def ai_rerank_by_embedding(
         texts,
         AIEmbeddingType.DOCUMENT,
         num_ratelimit_retries=num_ratelimit_retries,
+        cache=cache,
     )
 
     # Calculate cosine similarities (dot products since embeddings are normalized)
@@ -1240,7 +1252,11 @@ async def ai_rerank(
     num_ratelimit_retries: int = 10,
     # Backoff function (Receives index of attempt)
     backoff_algo: Callable[[int], float] = lambda i: min(2**i, 5),
+    # Cache
+    cache: dc.Cache | None = None,
 ) -> list[float]:
+    if cache is None:
+        cache = g_cache
     if isinstance(model, AIEmbeddingModel):
         assert top_k is None, "top_k is not supported for AIEmbeddingModel"
         return await ai_rerank_by_embedding(
@@ -1248,12 +1264,13 @@ async def ai_rerank(
             query,
             texts,
             num_ratelimit_retries=num_ratelimit_retries,
+            cache=cache,
         )
     text_scores: list[float | None] = [None] * len(texts)
-    if g_cache is not None:
+    if cache is not None:
         for i, text in enumerate(texts):
             cache_key = get_rerank_cache_key(model, query, text)
-            cache_result = cast(Any, g_cache.get(cache_key))  # pyright: ignore[reportUnknownMemberType]
+            cache_result = cast(Any, cache.get(cache_key))  # pyright: ignore[reportUnknownMemberType]
             if cache_result is not None:
                 # cast instead of assert isinstance, because of ints
                 cache_result = float(cache_result)
@@ -1566,9 +1583,9 @@ async def ai_rerank(
 
     assert len(unprocessed_indices) == len(relevance_scores)
     for index, score in zip(unprocessed_indices, relevance_scores, strict=True):
-        if g_cache is not None:
+        if cache is not None:
             cache_key = get_rerank_cache_key(model, query, texts[index])
-            g_cache.set(cache_key, score)  # pyright: ignore[reportUnknownMemberType]
+            cache.set(cache_key, score)  # pyright: ignore[reportUnknownMemberType]
         text_scores[index] = score
 
     assert all(score is not None for score in text_scores)
