@@ -9,11 +9,13 @@ from tqdm import tqdm
 from evals.ai import (
     AIEmbeddingModel,
     AIRerankModel,
-    AIModelAsReranker,
     ai_rerank,
     tiktoken_truncate_by_num_tokens,
 )
-from evals.ai_rerank import ai_rerank_by_ai_model
+from evals.ai_rerank import (
+    ai_rerank_by_ai_model,
+    AIModelAsReranker,
+)
 from evals.common import (
     DocumentScores,
     QueryScores,

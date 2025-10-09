@@ -89,7 +89,7 @@ def analyze_ndcg(
             retrieval_method, include_relevant_docs, reranker
         )
         if not os.path.exists(ze_scores_path):
-            print(f"- Missing ZeScores path for {reranker}")
+            print(f"- Missing reranker scores for {reranker}")
             continue
         all_ndcgs: list[float] = []
         with open(ze_scores_path) as f:

@@ -132,9 +132,6 @@ class AIMessage(BaseModel):
     role: Literal["system", "user", "assistant"]
     content: str
 
-class AIModelAsReranker(BaseModel):
-    model: AIModel
-    rerank_type: Literal["listwise"]
 
 def decode_embedding(embedding: str) -> AIEmbedding:
     return np.frombuffer(base64.b64decode(embedding), dtype="float16").astype(
@@ -843,8 +840,6 @@ async def ai_embedding(
             logger.debug(f"Cache Read Time: {(end_time - start_time) * 1000:.2f}ms")
     if not any(embedding is None for embedding in text_embeddings):
         return cast(list[AIEmbedding], text_embeddings)
-    
-    # filter to only empty indices
     required_text_embeddings_indices = [
         i for i in range(len(text_embeddings)) if text_embeddings[i] is None
     ]
