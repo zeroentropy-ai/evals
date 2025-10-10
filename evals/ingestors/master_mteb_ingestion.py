@@ -277,7 +277,7 @@ class MasterMtebIngestor(BaseIngestor):
                     )
                 )
 
-        return clean_dataset(queries, documents, qrels)
+        return queries, documents, qrels
 
     def extract_instructions_query_content(
         self, query_data: str | dict[Any, Any] | Any

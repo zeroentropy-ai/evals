@@ -5,6 +5,7 @@ from evals.ingestors.bioasq import BioasqIngestor
 from evals.ingestors.common import BaseIngestor
 from evals.ingestors.cosqa import CosqaIngestor
 from evals.ingestors.curev1 import CureV1Ingestor
+from evals.ingestors.enronqa import EnronQa
 from evals.ingestors.financebench import FinancebenchIngestor
 from evals.ingestors.finqabench import FinqabenchIngestor
 from evals.ingestors.fiqa import FiqaIngestor
@@ -143,6 +144,7 @@ NEW_INGESTORS: list[BaseIngestor] = [
     LeetcodeMultiLanguageIngestor(language="java"),
     LeetcodeMultiLanguageIngestor(language="javascript"),
     LeetcodeMultiLanguageIngestor(language="c++"),
+    EnronQa(),
     QuoraIngestor(),
     QuoraSwedishIngestor(),
     MeetingIngestor(),

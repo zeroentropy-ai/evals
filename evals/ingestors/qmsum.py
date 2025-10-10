@@ -7,7 +7,7 @@ from datasets import (  # pyright: ignore[reportMissingTypeStubs]
 from tqdm.asyncio import tqdm
 
 from evals.common import Document, QRel, Query
-from evals.ingestors.common import BaseIngestor
+from evals.ingestors.common import BaseIngestor, clean_dataset
 
 
 class QMSumIngestor(BaseIngestor):
@@ -42,7 +42,7 @@ class QMSumIngestor(BaseIngestor):
                 QRel(query_id=str(query_id), document_id=str(document_id), score=1)
             )
 
-        return queries, documents, qrels
+        return clean_dataset(queries, documents, qrels)
 
 
 if __name__ == "__main__":
