@@ -8,7 +8,7 @@ from tqdm import tqdm
 from evals.common import Document, QRel, Query
 from evals.ingestors.common import BaseIngestor, clean_dataset
 
-class EnronQa(BaseIngestor):
+class EnronQaIngestor(BaseIngestor):
     @override
     def dataset_id(self) -> str:
         return "evals/enronqa"
@@ -25,7 +25,7 @@ class EnronQa(BaseIngestor):
         # Create documents
         documents: list[Document] = []
         message_id_to_doc_id: dict[str, int] = {}
-        for index, document in tqdm(enumerate(corpus_dataset), desc="Documents"):
+        for index, document in enumerate(tqdm(corpus_dataset, desc="Documents")):
             doc_id = index
             email_content = \
                 f"Subject: {document["subject"]}\n" + \
@@ -48,7 +48,7 @@ class EnronQa(BaseIngestor):
         # Create QRel objects
         qrels: list[QRel] = []
         valid_query_ids: set[str] = set()
-        for index, question in tqdm(enumerate(queries_dataset), "QRels"):
+        for index, question in enumerate(tqdm(queries_dataset, "QRels")):
             related_message_ids = question["message_ids"]
             related_message_indices = [message_id_to_doc_id[mid] for mid in related_message_ids if mid in message_id_to_doc_id]
             if len(related_message_indices) > 0:
@@ -64,7 +64,7 @@ class EnronQa(BaseIngestor):
 
         # Create Query objects
         queries: list[Query] = []
-        for index, question in tqdm(enumerate(queries_dataset), desc="Queries"):
+        for index, question in enumerate(tqdm(queries_dataset, desc="Queries")):
             if str(index) not in valid_query_ids:
                 continue
             queries.append(
