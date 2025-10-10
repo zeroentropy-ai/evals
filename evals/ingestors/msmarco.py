@@ -7,7 +7,7 @@ from datasets import (  # pyright: ignore[reportMissingTypeStubs]
 from tqdm.asyncio import tqdm
 
 from evals.common import Document, QRel, Query
-from evals.ingestors.common import BaseIngestor
+from evals.ingestors.common import BaseIngestor, clean_dataset
 
 
 class MSMarcoIngestor(BaseIngestor):
@@ -47,7 +47,7 @@ class MSMarcoIngestor(BaseIngestor):
                 )
                 document_id += 1
 
-        return queries, documents, qrels
+        return clean_dataset(queries, documents, qrels)
 
 
 if __name__ == "__main__":
