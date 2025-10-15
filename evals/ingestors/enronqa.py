@@ -8,6 +8,7 @@ from tqdm import tqdm
 from evals.common import Document, QRel, Query
 from evals.ingestors.common import BaseIngestor, clean_dataset
 
+
 class EnronQaIngestor(BaseIngestor):
     @override
     def dataset_id(self) -> str:
@@ -21,28 +22,24 @@ class EnronQaIngestor(BaseIngestor):
         corpus_dataset = cast(Any, load_dataset(dataset_name, "default"))["train"]
         queries_dataset = cast(Any, load_dataset(queries_name, "default"))["train"]
 
-
         # Create documents
         documents: list[Document] = []
         message_id_to_doc_id: dict[str, int] = {}
         for index, document in enumerate(tqdm(corpus_dataset, desc="Documents")):
             doc_id = index
-            email_content = \
-                f"Subject: {document["subject"]}\n" + \
-                f"Date: {document["date"].strftime("%Y-%m-%d %H:%M:%S")}\n\n" + \
-                f"From: {document["from"]}\n" + \
-                f"To: {', '.join(document["to"])}\n" + \
-                f"Cc: {', '.join(document["cc"])}\n" + \
-                f"Bcc: {', '.join(document["bcc"])}\n" + \
-                f"{document["body"]}"
+            email_content = (
+                f"Subject: {document['subject']}\n"
+                + f"Date: {document['date'].strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+                + f"From: {document['from']}\n"
+                + f"To: {', '.join(document['to'])}\n"
+                + f"Cc: {', '.join(document['cc'])}\n"
+                + f"Bcc: {', '.join(document['bcc'])}\n"
+                + f"{document['body']}"
+            )
 
             message_id_to_doc_id[document["message_id"]] = doc_id
             documents.append(
-                Document(
-                    id=str(doc_id),
-                    content=email_content,
-                    metadata={}
-                )
+                Document(id=str(doc_id), content=email_content, metadata={})
             )
 
         # Create QRel objects
@@ -50,7 +47,11 @@ class EnronQaIngestor(BaseIngestor):
         valid_query_ids: set[str] = set()
         for index, question in enumerate(tqdm(queries_dataset, "QRels")):
             related_message_ids = question["message_ids"]
-            related_message_indices = [message_id_to_doc_id[mid] for mid in related_message_ids if mid in message_id_to_doc_id]
+            related_message_indices = [
+                message_id_to_doc_id[mid]
+                for mid in related_message_ids
+                if mid in message_id_to_doc_id
+            ]
             if len(related_message_indices) > 0:
                 for doc_index in related_message_indices:
                     qrels.append(

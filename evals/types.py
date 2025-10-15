@@ -5,7 +5,7 @@ from evals.ingestors.bioasq import BioasqIngestor
 from evals.ingestors.common import BaseIngestor
 from evals.ingestors.cosqa import CosqaIngestor
 from evals.ingestors.curev1 import CureV1Ingestor
-from evals.ingestors.enronqa import EnronQa
+from evals.ingestors.enronqa import EnronQaIngestor
 from evals.ingestors.financebench import FinancebenchIngestor
 from evals.ingestors.finqabench import FinqabenchIngestor
 from evals.ingestors.fiqa import FiqaIngestor
@@ -144,7 +144,7 @@ NEW_INGESTORS: list[BaseIngestor] = [
     LeetcodeMultiLanguageIngestor(language="java"),
     LeetcodeMultiLanguageIngestor(language="javascript"),
     LeetcodeMultiLanguageIngestor(language="c++"),
-    EnronQa(),
+    EnronQaIngestor(),
     QuoraIngestor(),
     QuoraSwedishIngestor(),
     MeetingIngestor(),
@@ -251,10 +251,10 @@ DEFAULT_MAX_QUERIES: int = 100
 DEFAULT_RETRIEVAL_METHOD: RetrievalMethod = "openai_small"
 DEFAULT_INCLUDE_RELEVANT_DOCS: bool = True
 DEFAULT_RERANKERS: list[RerankerName] = [
-    "cohere",
-    "gpt-4o-mini",
-    "gpt-4.1-mini",
-    "gpt-5-mini",
-    "gpt-5-nano",
+    # "cohere",
+    # "gpt-4o-mini",
+    # "gpt-4.1-mini",
+    # "gpt-5-mini",
+    # "gpt-5-nano",
     "zeroentropy-large",
 ]
