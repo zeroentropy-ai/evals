@@ -2,7 +2,7 @@ import os
 
 from pydantic import BaseModel
 
-from evals.ingestors.common import BaseIngestor, clean_dataset, limit_queries
+from evals.ingestors.common import BaseIngestor, limit_queries, validate_dataset
 from evals.types import DEFAULT_INGESTORS, DEFAULT_MAX_QUERIES
 
 
@@ -41,7 +41,8 @@ def run_ingestors(
         os.makedirs(dataset.root_path, exist_ok=True)
 
         # Run Ingestion
-        queries, documents, qrels = clean_dataset(*ingestor.ingest())
+        queries, documents, qrels = ingestor.ingest()
+        queries, documents, qrels = validate_dataset(queries, documents, qrels)
         queries, documents, qrels = limit_queries(
             queries,
             documents,
