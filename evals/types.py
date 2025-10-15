@@ -251,10 +251,10 @@ DEFAULT_MAX_QUERIES: int = 100
 DEFAULT_RETRIEVAL_METHOD: RetrievalMethod = "openai_small"
 DEFAULT_INCLUDE_RELEVANT_DOCS: bool = True
 DEFAULT_RERANKERS: list[RerankerName] = [
-    "cohere",
-    "gpt-4o-mini",
-    "gpt-4.1-mini",
-    "gpt-5-mini",
-    "gpt-5-nano",
+    # "cohere",
+    # "gpt-4o-mini",
+    # "gpt-4.1-mini",
+    # "gpt-5-mini",
+    # "gpt-5-nano",
     "zeroentropy-large",
 ]
