@@ -2,8 +2,7 @@ import asyncio
 from contextlib import ExitStack
 from typing import TextIO
 
-import diskcache as dc
-
+import diskcache as dc  # pyright: ignore[reportMissingTypeStubs]
 from tqdm import tqdm
 
 from evals.ai import (
@@ -13,8 +12,8 @@ from evals.ai import (
     tiktoken_truncate_by_num_tokens,
 )
 from evals.ai_rerank import (
-    ai_rerank_by_ai_model,
     AIModelAsReranker,
+    ai_rerank_by_ai_model,
 )
 from evals.common import (
     DocumentScores,
@@ -109,7 +108,7 @@ async def rerank_dataset(
                 eviction_policy="none",
             )
             if USE_RERANKER_CACHE
-            else None 
+            else None
         )
 
     num_lines = read_num_lines_pbar(ze_results_path, display_name=dataset.id)
@@ -143,14 +142,16 @@ async def rerank_dataset(
                 for document in ze_results.documents
             ]
             ground_truth_exists = any(
-                document.scores.get("human", 0) > 0
-                for document in ze_results.documents
+                document.scores.get("human", 0) > 0 for document in ze_results.documents
             )
             if ground_truth_exists:
                 all_results = await asyncio.gather(
                     *[
                         process_query(
-                            ALL_RERANKERS[reranker], query_text, document_texts, reranker_caches[reranker]
+                            ALL_RERANKERS[reranker],
+                            query_text,
+                            document_texts,
+                            reranker_caches[reranker],
                         )
                         for reranker in rerankers
                     ]
@@ -158,8 +159,7 @@ async def rerank_dataset(
             else:
                 # NOTE: Skip reranker calls when there's no ground truth in the top
                 all_results = [
-                    [-1 for _document_text in document_texts]
-                    for _reranker in rerankers
+                    [-1 for _document_text in document_texts] for _reranker in rerankers
                 ]
             for reranker, results in zip(rerankers, all_results, strict=False):
                 reranker_scores: QueryScores = QueryScores(

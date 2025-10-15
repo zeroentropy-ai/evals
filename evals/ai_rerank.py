@@ -1,18 +1,21 @@
 from typing import Literal
 
+import diskcache as dc  # pyright: ignore[reportMissingTypeStubs]
 from pydantic import BaseModel
-import diskcache as dc
 
 from evals.ai import AIMessage, AIModel, ai_call
 from evals.utils import clamp
+
 
 class AIModelAsReranker(BaseModel):
     model: AIModel
     rerank_type: Literal["listwise"]
 
+
 class RerankResult(BaseModel):
     index: int
     score: float
+
 
 class RerankOutput(BaseModel):
     results: list[RerankResult]

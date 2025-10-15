@@ -795,6 +795,7 @@ def get_embeddings_cache_key(
     key = f"{model.company}||||{model.model}||||{embedding_type.name}||||{hashlib.md5(text.encode()).hexdigest()}"
     return key
 
+
 def cosine_similarity(vec1: AIEmbedding, vec2: AIEmbedding) -> float:
     return np.dot(vec1, vec2)
 
