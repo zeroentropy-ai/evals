@@ -13,13 +13,13 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-24.04
-    name: Lint & Alembic
+    name: Lint
     steps:
       - uses: actions/checkout@v3
       - name: Install the latest version of uv
-        uses: astral-sh/setup-uv@v4
+        uses: astral-sh/setup-uv@v6
         with:
-          python-version: "3.12"
+          enable-cache: true
       - name: Install python dependencies with uv
         run: |
           uv sync
