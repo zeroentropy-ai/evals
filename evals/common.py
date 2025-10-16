@@ -1,30 +1,8 @@
-from typing import Any, Literal
+from typing import Any
 
 from pydantic import AliasChoices, BaseModel, Field, computed_field
 
 from evals.utils import ROOT
-
-RetrievalMethod = Literal[
-    "qwen3_4b", "qwen3_0.6b", "voyageai", "openai_small", "bm25", "hybrid"
-]
-MergeStatus = Literal["merged", "unmerged"]
-RerankerName = Literal[
-    "cohere",
-    "salesforce",
-    "zeroentropy-large",
-    "zeroentropy-small",
-    "zeroentropy-small-modal",
-    "zeroentropy-large-modal",
-    "zeroentropy-baseten",
-    "mixedbread",
-    "jina",
-    "qwen",
-    "openai-large-embedding",
-    "gpt-4o-mini",
-    "gpt-4.1-mini",
-    "gpt-5-mini",
-    "gpt-5-nano",
-]
 
 
 class ZEDataset(BaseModel):
@@ -57,38 +35,52 @@ class ZEDataset(BaseModel):
     def qrels_path(self) -> str:
         return self.file_path("qrels.jsonl")
 
-    def ze_results_path(
-        self, retrieval_method: RetrievalMethod, include_relevant_docs: bool
+    def retrieval_method_path(
+        self,
+        retrieval_method: str,
+        include_relevant_docs: bool,
+        path: str,
     ) -> str:
-        merge_status: MergeStatus = "merged" if include_relevant_docs else "unmerged"
-        return self.file_path(f"{retrieval_method}/{merge_status}/ze_results.jsonl")
+        if include_relevant_docs:
+            retrieval_method = f"{retrieval_method}+include_relevant_docs"
+        return self.file_path(f"{retrieval_method}/{path}")
+
+    def ze_results_path(
+        self,
+        retrieval_method: str,
+        include_relevant_docs: bool,
+    ) -> str:
+        return self.retrieval_method_path(
+            retrieval_method, include_relevant_docs, "ze_results.jsonl"
+        )
 
     def embeddings_cache_path(
-        self, retrieval_method: RetrievalMethod, include_relevant_docs: bool
+        self,
+        retrieval_method: str,
+        include_relevant_docs: bool,
     ) -> str:
-        merge_status: MergeStatus = "merged" if include_relevant_docs else "unmerged"
-        return self.file_path(f"{retrieval_method}/{merge_status}/embeddings_cache.db")
+        return self.retrieval_method_path(
+            retrieval_method, include_relevant_docs, "embeddings_cache.db"
+        )
 
     def reranker_cache_path(
         self,
-        retrieval_method: RetrievalMethod,
+        retrieval_method: str,
         include_relevant_docs: bool,
-        reranker: RerankerName,
+        reranker: str,
     ) -> str:
-        merge_status: MergeStatus = "merged" if include_relevant_docs else "unmerged"
-        return self.file_path(
-            f"{retrieval_method}/{merge_status}/{reranker}/reranker_cache.db"
+        return self.retrieval_method_path(
+            retrieval_method, include_relevant_docs, f"{reranker}/reranker_cache.db"
         )
 
     def ze_scores_path(
         self,
-        retrieval_method: RetrievalMethod,
+        retrieval_method: str,
         include_relevant_docs: bool,
-        reranker: RerankerName,
+        reranker: str,
     ) -> str:
-        merge_status: MergeStatus = "merged" if include_relevant_docs else "unmerged"
-        return self.file_path(
-            f"{retrieval_method}/{merge_status}/{reranker}/ze_scores.jsonl"
+        return self.retrieval_method_path(
+            retrieval_method, include_relevant_docs, f"{reranker}/ze_scores.jsonl"
         )
 
 

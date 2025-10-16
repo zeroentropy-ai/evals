@@ -1,6 +1,7 @@
+from typing import Literal
+
 from evals.ai import AIEmbeddingModel, AIModel, AIRerankModel
 from evals.ai_rerank import AIModelAsReranker
-from evals.common import RerankerName, RetrievalMethod
 from evals.ingestors.bioasq import BioasqIngestor
 from evals.ingestors.common import BaseIngestor
 from evals.ingestors.cosqa import CosqaIngestor
@@ -23,8 +24,36 @@ from evals.ingestors.quora import QuoraIngestor
 from evals.ingestors.quora_swedish import QuoraSwedishIngestor
 from evals.ingestors.stackoverflowqa import StackoverflowqaIngestor
 
+RetrievalMethod = Literal[
+    "qwen3_4b",
+    "qwen3_0.6b",
+    "voyageai",
+    "openai_small",
+    "bm25",
+    "hybrid",
+]
+
+RerankerName = Literal[
+    "cohere",
+    "salesforce",
+    "zeroentropy-large",
+    "zeroentropy-small",
+    "zeroentropy-small-modal",
+    "zeroentropy-large-modal",
+    "zeroentropy-baseten",
+    "mixedbread",
+    "jina",
+    "qwen",
+    "openai-large-embedding",
+    "gpt-4o-mini",
+    "gpt-4.1-mini",
+    "gpt-5-mini",
+    "gpt-5-nano",
+]
+
 ALL_RERANKERS: dict[
-    RerankerName, AIRerankModel | AIEmbeddingModel | AIModelAsReranker
+    RerankerName,
+    AIRerankModel | AIEmbeddingModel | AIModelAsReranker,
 ] = {
     "cohere": AIRerankModel(company="cohere", model="rerank-v3.5"),
     "salesforce": AIRerankModel(company="together", model="Salesforce/Llama-Rank-V1"),
@@ -246,10 +275,12 @@ MTEB_INGESTORS: list[BaseIngestor] = [
     ),
 ]
 ALL_INGESTORS: list[BaseIngestor] = MTEB_INGESTORS + NEW_INGESTORS + ORIGINAL_INGESTORS
+
+# Defaults
 DEFAULT_INGESTORS: list[BaseIngestor] = ORIGINAL_INGESTORS
 DEFAULT_MAX_QUERIES: int = 100
 DEFAULT_RETRIEVAL_METHOD: RetrievalMethod = "openai_small"
-DEFAULT_INCLUDE_RELEVANT_DOCS: bool = True
+DEFAULT_INCLUDE_RELEVANT_DOCS: bool = False
 DEFAULT_RERANKERS: list[RerankerName] = [
     # "cohere",
     # "gpt-4o-mini",

@@ -15,12 +15,13 @@ from evals.ai import (
     ai_embedding,
     tiktoken_truncate_by_num_tokens,
 )
-from evals.common import Document, QRel, Query, RetrievalMethod, ZEDataset, ZEResults
+from evals.common import Document, QRel, Query, ZEDataset, ZEResults
 from evals.ingestors.common import BaseIngestor
 from evals.types import (
     DEFAULT_INCLUDE_RELEVANT_DOCS,
     DEFAULT_INGESTORS,
     DEFAULT_RETRIEVAL_METHOD,
+    RetrievalMethod,
 )
 from evals.utils import ROOT
 

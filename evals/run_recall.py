@@ -4,8 +4,6 @@ from collections import defaultdict
 from evals.common import (
     QRel,
     QueryScores,
-    RerankerName,
-    RetrievalMethod,
     ZEDataset,
     ZEResults,
 )
@@ -15,6 +13,8 @@ from evals.types import (
     DEFAULT_INGESTORS,
     DEFAULT_RERANKERS,
     DEFAULT_RETRIEVAL_METHOD,
+    RerankerName,
+    RetrievalMethod,
 )
 from evals.utils import argsort, avg
 
