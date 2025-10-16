@@ -1,7 +1,6 @@
 import asyncio
 from typing import Literal
 
-from evals.common import RerankerName, RetrievalMethod
 from evals.ingestors.common import BaseIngestor
 from evals.run_embeddings import run_embeddings
 from evals.run_ingestors import run_ingestors
@@ -13,6 +12,8 @@ from evals.types import (
     DEFAULT_MAX_QUERIES,
     DEFAULT_RERANKERS,
     DEFAULT_RETRIEVAL_METHOD,
+    RerankerName,
+    RetrievalMethod,
 )
 
 INGESTORS: list[BaseIngestor] = DEFAULT_INGESTORS

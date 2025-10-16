@@ -214,11 +214,10 @@ data/datasets/
 │   ├── documents.jsonl         # Processed documents
 │   ├── qrels.jsonl            # Relevance judgments
 │   └── {retrieval_method}/
-│       └── {merged|unmerged}/
-│           ├── ze_results.jsonl        # Initial retrieval results
-│           ├── embeddings_cache.db     # Embedding cache
-│           └── {reranker}/
-│               └── ze_scores.jsonl  # Reranked results
+│       ├── ze_results.jsonl        # Initial retrieval results
+│       ├── embeddings_cache.db     # Embedding cache
+│       └── {reranker}/
+│           └── ze_scores.jsonl  # Reranked results
 ```
 
 ## Performance Tips

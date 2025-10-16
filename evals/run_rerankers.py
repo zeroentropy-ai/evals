@@ -18,8 +18,6 @@ from evals.ai_rerank import (
 from evals.common import (
     DocumentScores,
     QueryScores,
-    RerankerName,
-    RetrievalMethod,
     ZEDataset,
     ZEResults,
 )
@@ -30,6 +28,8 @@ from evals.types import (
     DEFAULT_INGESTORS,
     DEFAULT_RERANKERS,
     DEFAULT_RETRIEVAL_METHOD,
+    RerankerName,
+    RetrievalMethod,
 )
 from evals.utils import flatten, read_num_lines_pbar
 
@@ -45,7 +45,9 @@ AI_MODEL_AS_RERANKER_MAX_BYTES = 50_000
 
 
 async def process_query(
-    reranker: AIRerankModel | AIEmbeddingModel | AIModelAsReranker,
+    reranker: AIRerankModel
+    | AIEmbeddingModel
+    | AIModelAsReranker,
     query: str,
     documents: list[str],
     # Cache
