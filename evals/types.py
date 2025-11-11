@@ -13,12 +13,13 @@ from evals.ingestors.fiqa import FiqaIngestor
 from evals.ingestors.ineqs import IneqsIngestor
 from evals.ingestors.leetcode_multi import LeetcodeMultiLanguageIngestor
 from evals.ingestors.master_legal_ingestion import MasterLegalIngestor
+from evals.ingestors.master_mair_ingestion import MasterMairIngestor
 from evals.ingestors.master_mteb_ingestion import MasterMtebIngestor
 from evals.ingestors.mbpp import MbppIngestor
 from evals.ingestors.meeting import MeetingIngestor
 from evals.ingestors.msmarco import MSMarcoIngestor
 from evals.ingestors.narrativeqa import NarrativeQAIngestor
-from evals.ingestors.pandas import PandasIngestor
+from evals.ingestors.pandas_documentation import PandasDocumentationIngestor
 from evals.ingestors.qmsum import QMSumIngestor
 from evals.ingestors.quora import QuoraIngestor
 from evals.ingestors.quora_swedish import QuoraSwedishIngestor
@@ -178,7 +179,7 @@ NEW_INGESTORS: list[BaseIngestor] = [
     QuoraSwedishIngestor(),
     MeetingIngestor(),
     NarrativeQAIngestor(),
-    PandasIngestor(),
+    PandasDocumentationIngestor(),
 ]
 
 MTEB_INGESTORS: list[BaseIngestor] = [
@@ -274,6 +275,9 @@ MTEB_INGESTORS: list[BaseIngestor] = [
         split="test",
     ),
 ]
+
+MAIR_INGESTORS: list[BaseIngestor] = [*MasterMairIngestor.all_splits()]
+
 ALL_INGESTORS: list[BaseIngestor] = MTEB_INGESTORS + NEW_INGESTORS + ORIGINAL_INGESTORS
 
 # Defaults

@@ -145,7 +145,7 @@ def split_by_tokens(s: str, max_tokens: int) -> list[str]:
     if len(s.encode("utf-8")) <= max_tokens:  # Tokenization is always compressive
         return [s]
 
-    tokens = encoding.encode(s)
+    tokens = encoding.encode(s, disallowed_special=())
     total_tokens = len(tokens)
 
     # Determine minimum number of chunks needed
