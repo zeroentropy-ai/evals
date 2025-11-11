@@ -467,7 +467,7 @@ def tiktoken_truncate_by_num_tokens(
     model: str = "cl100k_base",
 ) -> str:
     encoding = tiktoken.get_encoding(model)
-    tokens = encoding.encode(s)
+    tokens = encoding.encode(s, disallowed_special=())
     tokens = tokens[:max_tokens]
     return encoding.decode(tokens)
 
@@ -496,12 +496,12 @@ def ai_num_tokens(model: AIModel | AIEmbeddingModel | AIRerankModel, s: str) -> 
             else:
                 model_str = model.model
             encoding = tiktoken.encoding_for_model(model_str)
-            num_tokens = len(encoding.encode(s))
+            num_tokens = len(encoding.encode(s, disallowed_special=()))
             return num_tokens
     if isinstance(model, AIEmbeddingModel):
         if model.company == "openai":
             encoding = tiktoken.encoding_for_model(model.model)
-            num_tokens = len(encoding.encode(s))
+            num_tokens = len(encoding.encode(s, disallowed_special=()))
             return num_tokens
         elif model.company == "voyageai":
             voyageai_client = get_ai_connection().voyageai_client
