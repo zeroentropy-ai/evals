@@ -57,21 +57,14 @@ class ZEDataset(BaseModel):
     def embeddings_cache_path(
         self,
         retrieval_method: str,
-        include_relevant_docs: bool,
     ) -> str:
-        return self.retrieval_method_path(
-            retrieval_method, include_relevant_docs, "embeddings_cache.db"
-        )
+        return self.file_path(f"embeddings_cache/{retrieval_method}.db")
 
     def reranker_cache_path(
         self,
-        retrieval_method: str,
-        include_relevant_docs: bool,
         reranker: str,
     ) -> str:
-        return self.retrieval_method_path(
-            retrieval_method, include_relevant_docs, f"{reranker}/reranker_cache.db"
-        )
+        return self.file_path(f"reranker_cache/{reranker}.db")
 
     def ze_scores_path(
         self,

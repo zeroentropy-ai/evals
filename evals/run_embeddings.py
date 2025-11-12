@@ -255,7 +255,9 @@ async def generate_embeddings(
     # Calculate similarity scores using selected retrieval method
     embeddings_cache = (
         dc.Cache(
-            dataset.embeddings_cache_path(retrieval_method, include_relevant_docs),
+            dataset.embeddings_cache_path(
+                retrieval_method if retrieval_method != "hybrid" else "openai_small"
+            ),
             eviction_policy="none",
         )
         if USE_EMBEDDINGS_CACHE
@@ -319,9 +321,11 @@ async def generate_embeddings(
             )
 
     # Save all necessary data
-    with open(
-        dataset.ze_results_path(retrieval_method, include_relevant_docs), "w"
-    ) as f:
+    ze_results_path = Path(
+        dataset.ze_results_path(retrieval_method, include_relevant_docs)
+    )
+    ze_results_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(ze_results_path, "w") as f:
         queries_processed = 0
         queries_skipped = 0
 
