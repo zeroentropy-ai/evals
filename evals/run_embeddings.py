@@ -293,7 +293,7 @@ async def generate_embeddings(
             top_sorted_indices, similarity_scores = await get_embeddings(
                 AIEmbeddingModel(
                     company="voyageai",
-                    model="voyage-3-large",
+                    model="voyage-3.5",
                 ),
                 queries,
                 documents,
