@@ -1,5 +1,6 @@
 import asyncio
 from contextlib import ExitStack
+from pathlib import Path
 from typing import TextIO
 
 import diskcache as dc  # pyright: ignore[reportMissingTypeStubs]
@@ -102,9 +103,7 @@ async def rerank_dataset(
     for reranker in rerankers:
         reranker_caches[reranker] = (
             dc.Cache(
-                directory=dataset.reranker_cache_path(
-                    retrieval_method, include_relevant_docs, reranker
-                ),
+                directory=dataset.reranker_cache_path(reranker),
                 eviction_policy="none",
             )
             if USE_RERANKER_CACHE
@@ -118,6 +117,11 @@ async def rerank_dataset(
         total=num_lines,
     )
     pending_tasks: set[asyncio.Task[None]] = set()
+
+    for reranker in rerankers:
+        Path(
+            dataset.ze_scores_path(retrieval_method, include_relevant_docs, reranker)
+        ).parent.mkdir(parents=True, exist_ok=True)
 
     with open(ze_results_path) as f, ExitStack() as stack:
         f_write: dict[RerankerName, TextIO] = {
