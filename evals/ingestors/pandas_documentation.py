@@ -9,7 +9,7 @@ from evals.common import Document, QRel, Query
 from evals.ingestors.common import BaseIngestor, clean_dataset
 
 
-class PandasIngestor(BaseIngestor):
+class PandasDocumentationIngestor(BaseIngestor):
     @override
     def dataset_id(self) -> str:
         return "evals/pandas"
