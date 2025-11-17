@@ -10,7 +10,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import IO, Any
 
-import aiohttp
+import httpx
 import numpy as np
 from datasets import (  # pyright: ignore[reportMissingTypeStubs]
     Dataset,
@@ -64,13 +64,13 @@ def sigmoid(x: float) -> float:
     return 1 / (1 + math.exp(-x))
 
 
-client_connections: dict[asyncio.AbstractEventLoop, aiohttp.ClientSession] = {}
+client_connections: dict[asyncio.AbstractEventLoop, httpx.AsyncClient] = {}
 
 
-def get_client() -> aiohttp.ClientSession:
+def get_client() -> httpx.AsyncClient:
     event_loop = asyncio.get_event_loop()
     if event_loop not in client_connections:
-        client_connections[event_loop] = aiohttp.ClientSession()
+        client_connections[event_loop] = httpx.AsyncClient()
     return client_connections[event_loop]
 
 
@@ -97,6 +97,11 @@ def unzip4[A, B, C, D](
         if len(pairs) > 0
         else ([], [], [], [])
     )  # pyright: ignore[reportReturnType]
+
+
+async def async_zip[T, *Ts](f: Awaitable[T], *args: *Ts) -> tuple[T, *Ts]:
+    result = await f
+    return (result, *args)
 
 
 def avg(values: list[float]) -> float:
